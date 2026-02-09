@@ -1,0 +1,1 @@
+# BA_Blender_auto_material
