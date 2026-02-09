@@ -10,4 +10,4 @@
 
 [![Discord](https://img.shields.io/discord/YOUR_SERVER_ID?label=Discord&logo=discord)](https://discord.gg/cgRrjKh7)
 
--If you run into any issues, you can reach me on this Discord server. I don’t always check GitHub.
+If you run into any issues, you can reach me on this Discord server. I don’t always check GitHub.
