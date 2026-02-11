@@ -1,6 +1,7 @@
 # BA_Blender_auto_material
 
 ## Usage
+- Blender 4.5
 - Install the add-on
 - Find **BA** in the sidebar
 - Select the model and make sure it is in a static pose facing the `-Y` axis
