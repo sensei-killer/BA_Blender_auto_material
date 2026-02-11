@@ -97,6 +97,7 @@ def build_outline_vertex_group(obj):
             name.endswith("_Hair")
             or name.endswith("_Face")
             or name.endswith("_Body")
+            or name.endswith("_Body_Arms")
         ):
             vg.add(poly.vertices, 1.0, 'ADD')
 
@@ -203,3 +204,4 @@ def add_ba_outline(context):
             setup_outline_geometry_nodes(obj)
 
     return {'FINISHED'}
+
