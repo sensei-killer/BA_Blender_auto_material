@@ -9,6 +9,6 @@
 
 ## Feedback
 
-[![Discord](https://img.shields.io/discord/YOUR_SERVER_ID?label=Discord&logo=discord)](https://discord.gg/cgRrjKh7)
+[![Discord](https://img.shields.io/discord/YOUR_SERVER_ID?label=Discord&logo=discord)](https://discord.gg/3nmxESc6Ha)
 
 If you run into any issues, you can reach me on this Discord server. I don’t always check GitHub.
