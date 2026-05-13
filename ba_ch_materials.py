@@ -200,7 +200,7 @@ def setup_hair(mat, images):
         safe_link(nt, spec.outputs.get('Alpha'), shader.inputs[3])
 
     safe_link(nt, shader.outputs[0], out.inputs['Surface'])
-    
+
 def setup_eyebrow(mat, images):
     if not mat.use_nodes:
         mat.use_nodes = True
@@ -220,7 +220,7 @@ def setup_eyebrow(mat, images):
     if tex is None:
         clear_nodes(mat)
         nt = mat.node_tree
-        
+
         out_node = ensure_output(mat)
 
         no_shadow_node = nt.nodes.new("ShaderNodeGroup")
@@ -232,7 +232,7 @@ def setup_eyebrow(mat, images):
             no_shadow_node.outputs.get('Surface', no_shadow_node.outputs[0]),
             out_node.inputs['Surface']
         )
-        
+
         eyebrow_node_group = nt.nodes.new("ShaderNodeGroup")
         eyebrow_node_group.node_tree = ensure_node_group("eyebrow_in_front")
         eyebrow_node_group.location = (0, -200)
@@ -269,7 +269,7 @@ def setup_eyebrow(mat, images):
 
     safe_link(nt, eyebrow_node_group.outputs.get('Displacement'), out_node.inputs.get('Displacement'))
 
-    mat.displacement_method = 'BOTH' 
+    mat.displacement_method = 'BOTH'
 
 def setup_body_alpha(mat, images):
     clear_nodes(mat)
@@ -279,7 +279,7 @@ def setup_body_alpha(mat, images):
     tex_mask = find_image(images, "Body_Mask")
 
     mat.surface_render_method = 'BLENDED'
-    
+
     if not tex_body:
         print(f"[BA] Body texture missing: {mat.name}")
         return
@@ -306,7 +306,7 @@ def setup_body_alpha(mat, images):
         safe_link(nt, mask.outputs.get('Color'), body_shader.inputs[1])
         safe_link(nt, mask.outputs.get('Alpha'), body_shader.inputs[2])
 
-    # 
+    #
     safe_link(
         nt,
         body_shader.outputs[0],
@@ -318,6 +318,27 @@ def setup_body_alpha(mat, images):
         alpha_shader.outputs[0],
         out.inputs['Surface']
     )
+
+
+CHARACTER_MATERIAL_HANDLERS = (
+    ("_Body_Arms", setup_body),
+    ("_Body", setup_body),
+    ("_Alpha", setup_body_alpha),
+    ("_Face", setup_face),
+    ("_Hair", setup_hair),
+    ("_EyeMouth", setup_eyemouth),
+    ("_Eyebrow2", setup_eyebrow),
+    ("_Eyebrow", setup_eyebrow),
+)
+
+
+def setup_character_material(mat, images):
+    for suffix, handler in CHARACTER_MATERIAL_HANDLERS:
+        if mat.name.endswith(suffix):
+            handler(mat, images)
+            return True
+
+    return False
 
 
 # -------- Operator --------
@@ -349,35 +370,11 @@ class BA_OT_setup_materials(Operator):
                     mats.add(slot.material)
 
         for mat in mats:
-            name = mat.name
-            if name.endswith("_Body"):
-                setup_body(mat, images)
+            setup_character_material(mat, images)
 
-            elif name.endswith("_Alpha"):
-                setup_body_alpha(mat, images)
-
-            elif name.endswith("_Face"):
-                setup_face(mat, images)
-
-            elif name.endswith("_Hair"):
-                setup_hair(mat, images)
-
-            elif name.endswith("_EyeMouth"):
-                setup_eyemouth(mat, images)
-
-            elif name.endswith("_Eyebrow"):
-                setup_eyebrow(mat, images)
-                
-            elif name.endswith("_Eyebrow2"):
-                setup_eyebrow(mat, images)
-                
-            elif name.endswith("_Body_Arms"):
-                setup_body(mat, images)
-               
-                
         ba_shader_controls.ensure_hair_spec_control(context)
         ba_shader_controls.ensure_face_light_dot_control(context)
-        
+
         empty = bpy.data.objects.get("face_light_dot")
         ba_shader_controls.add_face_rotation_drivers(empty, context)
 

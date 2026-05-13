@@ -87,6 +87,28 @@ def test_rotation_driver_helpers_guard_against_missing_empty():
     assert "if empty is None:" in source
 
 
+def test_character_material_dispatch_uses_ordered_handler_table():
+    source = (ROOT / "ba_ch_materials.py").read_text(encoding="utf-8")
+
+    assert "CHARACTER_MATERIAL_HANDLERS" in source
+    assert "def setup_character_material" in source
+
+    expected_order = [
+        '"_Body_Arms"',
+        '"_Body"',
+        '"_Alpha"',
+        '"_Face"',
+        '"_Hair"',
+        '"_EyeMouth"',
+        '"_Eyebrow2"',
+        '"_Eyebrow"',
+    ]
+    positions = [source.index(suffix) for suffix in expected_order]
+
+    assert positions == sorted(positions)
+    assert "setup_character_material(mat, images)" in source
+
+
 if __name__ == "__main__":
     test_common_blender_helpers_live_in_utils_module()
     test_init_only_registers_one_character_setup_operator()
@@ -94,3 +116,4 @@ if __name__ == "__main__":
     test_prop_outline_node_group_name_is_spelled_correctly()
     test_shader_controls_expose_shared_head_control_helper()
     test_rotation_driver_helpers_guard_against_missing_empty()
+    test_character_material_dispatch_uses_ordered_handler_table()
