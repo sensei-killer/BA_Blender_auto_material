@@ -3,23 +3,9 @@ import os
 from bpy.types import Operator, PropertyGroup
 from bpy.props import CollectionProperty, StringProperty
 
+from .ba_utils import clear_nodes, ensure_node_group, ensure_output, new_tex
+
 # ---------------- utils ----------------
-
-def ensure_node_group(group_name):
-    if group_name in bpy.data.node_groups:
-        return bpy.data.node_groups[group_name]
-
-    addon_dir = os.path.dirname(__file__)
-    blend_path = os.path.join(addon_dir, "shaders", "ba_node_groups.blend")
-
-    with bpy.data.libraries.load(blend_path, link=False) as (data_from, data_to):
-        if group_name in data_from.node_groups:
-            data_to.node_groups = [group_name]
-        else:
-            print(f"[BA] Node group not found: {group_name}")
-            return None
-
-    return bpy.data.node_groups.get(group_name)
 
 def is_alpha_material(mat):
     return mat.name.lower().endswith("_alpha")
@@ -32,34 +18,6 @@ def find_image_node(mat):
         if n.type == 'TEX_IMAGE' and n.image:
             return n
     return None
-
-
-
-def ensure_output(mat):
-    nt = mat.node_tree
-    out = nt.nodes.get("Material Output")
-    if not out:
-        out = nt.nodes.new("ShaderNodeOutputMaterial")
-        out.location = (400, 0)
-    return out
-
-
-def clear_nodes(mat):
-    nt = mat.node_tree
-    nt.nodes.clear()
-
-
-def new_tex(nt, img, non_color=False, loc=(0, 0)):
-    if img is None:
-        return None    
-    n = nt.nodes.new("ShaderNodeTexImage")
-    n.image = img
-    if n.image:
-            n.image.alpha_mode = 'CHANNEL_PACKED'
-    if non_color:
-        n.image.colorspace_settings.name = 'Non-Color'
-    n.location = loc
-    return n
 
 def find_base_and_mask(images):
     base = None

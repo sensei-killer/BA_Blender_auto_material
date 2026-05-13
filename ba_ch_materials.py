@@ -5,6 +5,7 @@ from bpy.types import Operator, PropertyGroup
 
 from . import ba_shader_controls
 from . import ba_outline
+from .ba_utils import clear_nodes, ensure_node_group, ensure_output, new_tex, safe_link
 
 # -------- utils--------
 def build_import_image_map(images):
@@ -58,53 +59,6 @@ def detect_material_base_type(mat):
             return "FACE"
 
     return None
-
-def safe_link(nt, out_socket, in_socket):
-    if out_socket and in_socket:
-        nt.links.new(out_socket, in_socket)
-
-def ensure_output(mat):
-    nt = mat.node_tree
-    out = nt.nodes.get("Material Output")
-    if not out:
-        out = nt.nodes.new("ShaderNodeOutputMaterial")
-        out.location = (400, 0)
-    return out
-
-
-def clear_nodes(mat):
-    nt = mat.node_tree
-    nt.nodes.clear()
-
-
-def new_tex(nt, img, non_color=False, loc=(0, 0)):
-    if img is None:
-        return None
-    n = nt.nodes.new("ShaderNodeTexImage")
-    n.image = img
-    if n.image:
-            n.image.alpha_mode = 'CHANNEL_PACKED'
-    if non_color:
-        n.image.colorspace_settings.name = 'Non-Color'
-    n.location = loc
-    return n
-
-
-def ensure_node_group(group_name):
-    if group_name in bpy.data.node_groups:
-        return bpy.data.node_groups[group_name]
-
-    addon_dir = os.path.dirname(__file__)
-    blend_path = os.path.join(addon_dir, "shaders", "ba_node_groups.blend")
-
-    with bpy.data.libraries.load(blend_path, link=False) as (data_from, data_to):
-        if group_name in data_from.node_groups:
-            data_to.node_groups = [group_name]
-        else:
-            print(f"[BA] Node group not found: {group_name}")
-            return None
-
-    return bpy.data.node_groups.get(group_name)
 
 # -------- setup functions --------
 def setup_emission(mat, image, strength=1.0):

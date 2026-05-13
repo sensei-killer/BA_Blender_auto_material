@@ -4,21 +4,7 @@ import os
 from bpy_extras.io_utils import ImportHelper
 from bpy.props import StringProperty
 
-def ensure_node_group(group_name):
-    if group_name in bpy.data.node_groups:
-        return bpy.data.node_groups[group_name]
-
-    addon_dir = os.path.dirname(__file__)
-    blend_path = os.path.join(addon_dir, "shaders", "ba_node_groups.blend")
-
-    with bpy.data.libraries.load(blend_path, link=False) as (data_from, data_to):
-        if group_name in data_from.node_groups:
-            data_to.node_groups = [group_name]
-        else:
-            print(f"[BA] Node group not found: {group_name}")
-            return None
-
-    return bpy.data.node_groups.get(group_name)
+from .ba_utils import ensure_node_group
 
 class BA_OT_halo_pick_image(bpy.types.Operator, ImportHelper):
     """Pick image and apply emission material"""
