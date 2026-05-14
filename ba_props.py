@@ -3,7 +3,7 @@ import os
 from bpy.types import Operator, PropertyGroup
 from bpy.props import CollectionProperty, StringProperty
 
-from .ba_utils import clear_nodes, ensure_node_group, ensure_output, new_tex
+from .ba_utils import clear_nodes, ensure_node_group, ensure_output, new_tex, safe_link
 
 # ---------------- utils ----------------
 
@@ -24,7 +24,10 @@ def find_base_and_mask(images):
     mask = None
 
     for img in images:
-        name = os.path.splitext(os.path.basename(img.name))[0].lower()
+        if img.filepath:
+            name = os.path.splitext(os.path.basename(bpy.path.abspath(img.filepath)))[0].lower()
+        else:
+            name = os.path.splitext(os.path.basename(img.name))[0].lower()
 
         if name.endswith("mask"):
             if mask is None:
@@ -58,41 +61,38 @@ def setup_prop_material(mat, images):
     if mask_img:
         mask_node = new_tex(nt, mask_img, non_color=True, loc=(-600, -100))
 
-    # --- Shader Group ---
-    shader_node = nt.nodes.new("ShaderNodeGroup")
-    ng = ensure_node_group("ba_weapon_shader")
-    if not ng:
+    # --- Shader Groups ---
+    weapon_node = nt.nodes.new("ShaderNodeGroup")
+    weapon_group = ensure_node_group("ba_weapon_shader")
+    if not weapon_group:
         print(f"[BA] Node group 'ba_weapon_shader' not found for {mat.name}")
         return
-    shader_node.node_tree = ng
-    shader_node.location = (-200, 0)
+
+    metallic_node = nt.nodes.new("ShaderNodeGroup")
+    metallic_group = ensure_node_group("ba_metallic_shader")
+    if not metallic_group:
+        print(f"[BA] Node group 'ba_metallic_shader' not found for {mat.name}")
+        return
+
+    weapon_node.node_tree = weapon_group
+    weapon_node.location = (-200, 100)
+
+    metallic_node.node_tree = metallic_group
+    metallic_node.location = (80, 100)
 
     # --- Output ---
     output_node = ensure_output(mat)
 
-    # ---  Base ---
-    try:
-        if "Base_Color" in shader_node.inputs:
-            nt.links.new(base_node.outputs['Color'], shader_node.inputs['Base_Color'])
-        else:
-            nt.links.new(base_node.outputs['Color'], shader_node.inputs[0])
-    except Exception as e:
-        print(f"[BA] Failed to link base for {mat.name}: {e}")
+    # --- Links ---
+    safe_link(nt, base_node.outputs.get("Color"), weapon_node.inputs.get("Base_Color"))
+    safe_link(nt, base_node.outputs.get("Color"), metallic_node.inputs.get("Base_Color"))
 
-    # ---  Mask ---
     if mask_node:
-        mask_input = shader_node.inputs.get("Mask")
-        if mask_input:
-            try:
-                nt.links.new(mask_node.outputs['Color'], mask_input)
-            except Exception as e:
-                print(f"[BA] Failed to link mask for {mat.name}: {e}")
+        safe_link(nt, mask_node.outputs.get("Color"), weapon_node.inputs.get("Mask"))
+        safe_link(nt, mask_node.outputs.get("Color"), metallic_node.inputs.get("Mask"))
 
-    # --- output ---
-    try:
-        nt.links.new(shader_node.outputs[0], output_node.inputs['Surface'])
-    except Exception as e:
-        print(f"[BA] Failed to link shader output for {mat.name}: {e}")
+    safe_link(nt, weapon_node.outputs.get("Result"), metallic_node.inputs.get("Color"))
+    safe_link(nt, metallic_node.outputs.get("Result"), output_node.inputs.get("Surface"))
 
 
 

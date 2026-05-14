@@ -109,6 +109,20 @@ def test_character_material_dispatch_uses_ordered_handler_table():
     assert "setup_character_material(mat, images)" in source
 
 
+def test_prop_material_uses_metallic_shader_pipeline():
+    source = (ROOT / "ba_props.py").read_text(encoding="utf-8")
+
+    assert "safe_link" in source
+    assert '"ba_weapon_shader"' in source
+    assert '"ba_metallic_shader"' in source
+    assert 'inputs.get("Base_Color")' in source
+    assert 'inputs.get("Mask")' in source
+    assert 'inputs.get("Color")' in source
+    assert 'outputs.get("Result")' in source
+    assert 'output_node.inputs.get("Surface")' in source
+    assert "shader_node.outputs[0]" not in source
+
+
 if __name__ == "__main__":
     test_common_blender_helpers_live_in_utils_module()
     test_init_only_registers_one_character_setup_operator()
@@ -117,3 +131,4 @@ if __name__ == "__main__":
     test_shader_controls_expose_shared_head_control_helper()
     test_rotation_driver_helpers_guard_against_missing_empty()
     test_character_material_dispatch_uses_ordered_handler_table()
+    test_prop_material_uses_metallic_shader_pipeline()
