@@ -80,8 +80,8 @@ def setup_emission(mat, image, strength=1.0):
 
     out = ensure_output(mat)
 
-    nt.links.new(tex.outputs['Color'], emission.inputs['Color'])
-    nt.links.new(emission.outputs['Emission'], out.inputs['Surface'])
+    safe_link(nt, tex.outputs.get('Color'), emission.inputs.get('Color'))
+    safe_link(nt, emission.outputs.get('Emission'), out.inputs.get('Surface'))
 
 def setup_eyemouth(mat, images):
 

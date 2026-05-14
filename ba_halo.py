@@ -4,7 +4,7 @@ import os
 from bpy_extras.io_utils import ImportHelper
 from bpy.props import StringProperty
 
-from .ba_utils import ensure_node_group
+from .ba_utils import ensure_node_group, safe_link
 
 class BA_OT_halo_pick_image(bpy.types.Operator, ImportHelper):
     """Pick image and apply emission material"""
@@ -38,7 +38,6 @@ class BA_OT_halo_pick_image(bpy.types.Operator, ImportHelper):
         mat.use_nodes = True
 
         nodes = mat.node_tree.nodes
-        links = mat.node_tree.links
         nodes.clear()
 
         tex = nodes.new("ShaderNodeTexImage")
@@ -58,8 +57,8 @@ class BA_OT_halo_pick_image(bpy.types.Operator, ImportHelper):
         output.location = (200, 0)
 
 
-        links.new(tex.outputs["Color"], halo.inputs[0])
-        links.new(halo.outputs[0], output.inputs["Surface"])
+        safe_link(mat.node_tree, tex.outputs.get("Color"), halo.inputs[0])
+        safe_link(mat.node_tree, halo.outputs[0], output.inputs.get("Surface"))
 
 
         if obj.data.materials:

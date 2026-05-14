@@ -123,6 +123,17 @@ def test_prop_material_uses_metallic_shader_pipeline():
     assert "shader_node.outputs[0]" not in source
 
 
+def test_feature_modules_use_safe_link_for_node_links():
+    for module_name in [
+        "ba_ch_materials.py",
+        "ba_halo.py",
+        "ba_props.py",
+    ]:
+        source = (ROOT / module_name).read_text(encoding="utf-8")
+
+        assert ".links.new(" not in source, module_name
+
+
 if __name__ == "__main__":
     test_common_blender_helpers_live_in_utils_module()
     test_init_only_registers_one_character_setup_operator()
@@ -132,3 +143,4 @@ if __name__ == "__main__":
     test_rotation_driver_helpers_guard_against_missing_empty()
     test_character_material_dispatch_uses_ordered_handler_table()
     test_prop_material_uses_metallic_shader_pipeline()
+    test_feature_modules_use_safe_link_for_node_links()

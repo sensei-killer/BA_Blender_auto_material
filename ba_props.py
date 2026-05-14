@@ -145,12 +145,12 @@ def setup_alpha_material(mat, images):
 
     if tex_node:
         if "Color" in tex_node.outputs and len(alpha_node.inputs) > 0:
-            nt.links.new(tex_node.outputs["Color"], alpha_node.inputs[0])
+            safe_link(nt, tex_node.outputs.get("Color"), alpha_node.inputs[0])
 
         if "Alpha" in tex_node.outputs and len(alpha_node.inputs) > 1:
-            nt.links.new(tex_node.outputs["Alpha"], alpha_node.inputs[1])
+            safe_link(nt, tex_node.outputs.get("Alpha"), alpha_node.inputs[1])
 
     # --------------------------------
     # output
     # --------------------------------
-    nt.links.new(alpha_node.outputs[0], out.inputs["Surface"])
+    safe_link(nt, alpha_node.outputs[0], out.inputs.get("Surface"))
