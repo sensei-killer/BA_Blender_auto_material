@@ -5,7 +5,7 @@ from bpy.types import Operator, PropertyGroup
 
 from . import ba_shader_controls
 from . import ba_outline
-from .ba_utils import clear_nodes, ensure_node_group, ensure_output, new_tex, safe_link
+from .ba_utils import add_light_color_node, clear_nodes, ensure_node_group, ensure_output, new_tex, safe_link
 
 # -------- utils--------
 def build_import_image_map(images):
@@ -100,9 +100,16 @@ def setup_eyemouth(mat, images):
 
     no_shadow_node = nt.nodes.new("ShaderNodeGroup")
     no_shadow_node.node_tree = ensure_node_group("ba_no_shadow")
-    no_shadow_node.location = (-150, 0)
+    no_shadow_node.location = (80, 0)
 
-    safe_link(nt, tex_node.outputs.get('Color'), no_shadow_node.inputs[0])
+    light_color = add_light_color_node(
+        nt,
+        tex_node.outputs.get('Color'),
+        tex_node.outputs.get('Color'),
+        (-180, 0)
+    )
+
+    safe_link(nt, light_color.outputs.get('Color'), no_shadow_node.inputs[0])
 
     out_node = ensure_output(mat)
     safe_link(nt, no_shadow_node.outputs[0], out_node.inputs['Surface'])
@@ -137,7 +144,14 @@ def setup_body(mat, images):
         safe_link(nt, mask.outputs.get('Color'), shader.inputs[1])
         safe_link(nt, mask.outputs.get('Alpha'), shader.inputs[2])
 
-    safe_link(nt, shader.outputs[0], out.inputs['Surface'])
+    light_color = add_light_color_node(
+        nt,
+        shader.outputs.get('Result', shader.outputs[0]),
+        body.outputs.get('Color'),
+        (40, 0)
+    )
+
+    safe_link(nt, light_color.outputs.get('Color'), out.inputs['Surface'])
 
 
 def setup_face(mat, images):
@@ -165,7 +179,14 @@ def setup_face(mat, images):
     if mask:
         safe_link(nt, mask.outputs.get('Color'), shader.inputs[1])
 
-    safe_link(nt, shader.outputs[0], out.inputs['Surface'])
+    light_color = add_light_color_node(
+        nt,
+        shader.outputs.get('Result', shader.outputs[0]),
+        face.outputs.get('Color'),
+        (40, 0)
+    )
+
+    safe_link(nt, light_color.outputs.get('Color'), out.inputs['Surface'])
 
 
 def setup_hair(mat, images):
@@ -199,7 +220,14 @@ def setup_hair(mat, images):
         safe_link(nt, spec.outputs.get('Color'), shader.inputs[2])
         safe_link(nt, spec.outputs.get('Alpha'), shader.inputs[3])
 
-    safe_link(nt, shader.outputs[0], out.inputs['Surface'])
+    light_color = add_light_color_node(
+        nt,
+        shader.outputs.get('Result', shader.outputs[0]),
+        hair.outputs.get('Color'),
+        (40, 0)
+    )
+
+    safe_link(nt, light_color.outputs.get('Color'), out.inputs['Surface'])
 
 def setup_eyebrow(mat, images):
     if not mat.use_nodes:
@@ -254,9 +282,16 @@ def setup_eyebrow(mat, images):
     # ba_no_shadow
     no_shadow_node = nt.nodes.new("ShaderNodeGroup")
     no_shadow_node.node_tree = ensure_node_group("ba_no_shadow")
-    no_shadow_node.location = (-150, 0)
+    no_shadow_node.location = (80, 0)
 
-    safe_link(nt, tex_node.outputs.get('Color'), no_shadow_node.inputs[0])
+    light_color = add_light_color_node(
+        nt,
+        tex_node.outputs.get('Color'),
+        tex_node.outputs.get('Color'),
+        (-180, 0)
+    )
+
+    safe_link(nt, light_color.outputs.get('Color'), no_shadow_node.inputs[0])
 
     out_node = ensure_output(mat)
     safe_link(nt, no_shadow_node.outputs[0], out_node.inputs['Surface'])

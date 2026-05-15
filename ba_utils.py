@@ -89,6 +89,17 @@ def safe_link(nt, out_socket, in_socket):
         nt.links.new(out_socket, in_socket)
 
 
+def add_light_color_node(nt, shaded_color_socket, base_color_socket, loc=(40, 0)):
+    node = nt.nodes.new("ShaderNodeGroup")
+    node.node_tree = ensure_node_group("ba_light_color")
+    node.location = loc
+
+    safe_link(nt, shaded_color_socket, node.inputs.get("Color"))
+    safe_link(nt, base_color_socket, node.inputs.get("basecolor"))
+
+    return node
+
+
 def remove_existing_nodes_modifier(obj, node_group_name):
     for mod in list(obj.modifiers):
         if (

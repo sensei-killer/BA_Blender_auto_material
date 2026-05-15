@@ -3,7 +3,7 @@ import os
 from bpy.types import Operator, PropertyGroup
 from bpy.props import CollectionProperty, StringProperty
 
-from .ba_utils import clear_nodes, ensure_node_group, ensure_output, new_tex, safe_link
+from .ba_utils import add_light_color_node, clear_nodes, ensure_node_group, ensure_output, new_tex, safe_link
 
 # ---------------- utils ----------------
 
@@ -78,7 +78,14 @@ def setup_prop_material(mat, images):
     weapon_node.location = (-200, 100)
 
     metallic_node.node_tree = metallic_group
-    metallic_node.location = (80, 100)
+    light_color = add_light_color_node(
+        nt,
+        weapon_node.outputs.get("Result"),
+        base_node.outputs.get("Color"),
+        (60, 100)
+    )
+
+    metallic_node.location = (320, 100)
 
     # --- Output ---
     output_node = ensure_output(mat)
@@ -91,7 +98,7 @@ def setup_prop_material(mat, images):
         safe_link(nt, mask_node.outputs.get("Color"), weapon_node.inputs.get("Mask"))
         safe_link(nt, mask_node.outputs.get("Color"), metallic_node.inputs.get("Mask"))
 
-    safe_link(nt, weapon_node.outputs.get("Result"), metallic_node.inputs.get("Color"))
+    safe_link(nt, light_color.outputs.get("Color"), metallic_node.inputs.get("Color"))
     safe_link(nt, metallic_node.outputs.get("Result"), output_node.inputs.get("Surface"))
 
 

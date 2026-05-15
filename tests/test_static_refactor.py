@@ -29,6 +29,7 @@ def test_common_blender_helpers_live_in_utils_module():
         "clear_nodes",
         "new_tex",
         "safe_link",
+        "add_light_color_node",
         "import_material",
         "ensure_socket_is_attribute",
     }.issubset(functions)
@@ -134,6 +135,25 @@ def test_feature_modules_use_safe_link_for_node_links():
         assert ".links.new(" not in source, module_name
 
 
+def test_material_setups_route_through_light_color_node():
+    utils_source = (ROOT / "ba_utils.py").read_text(encoding="utf-8")
+    ch_source = (ROOT / "ba_ch_materials.py").read_text(encoding="utf-8")
+    prop_source = (ROOT / "ba_props.py").read_text(encoding="utf-8")
+
+    assert '"ba_light_color"' in utils_source
+    assert "def add_light_color_node" in utils_source
+    assert 'inputs.get("Color")' in utils_source
+    assert 'inputs.get("basecolor")' in utils_source
+    assert "return node" in utils_source
+
+    assert "add_light_color_node" in ch_source
+    assert "light_color" in ch_source
+
+    assert "add_light_color_node" in prop_source
+    assert "light_color" in prop_source
+    assert "weapon_node.outputs.get(\"Result\"), metallic_node.inputs.get(\"Color\")" not in prop_source
+
+
 if __name__ == "__main__":
     test_common_blender_helpers_live_in_utils_module()
     test_init_only_registers_one_character_setup_operator()
@@ -144,3 +164,4 @@ if __name__ == "__main__":
     test_character_material_dispatch_uses_ordered_handler_table()
     test_prop_material_uses_metallic_shader_pipeline()
     test_feature_modules_use_safe_link_for_node_links()
+    test_material_setups_route_through_light_color_node()
