@@ -10,6 +10,10 @@ from .ba_utils import add_alpha_node, add_light_color_node, add_lit_alpha_node, 
 def is_alpha_material(mat):
     return mat.name.lower().endswith("_alpha")
 
+
+def is_car_alpha_material(mat):
+    return mat.name.lower().endswith("_car_alpha")
+
 def find_image_node(mat):
     if not mat.use_nodes:
         return None
@@ -107,13 +111,17 @@ def setup_alpha_material(mat, images):
     setup_prop_alpha_material(mat, images)
 
 
-def setup_prop_alpha_material(mat, images):
+def setup_car_alpha_material(mat, images):
+    setup_prop_alpha_material(mat, images, use_textures=False)
+
+
+def setup_prop_alpha_material(mat, images, use_textures=True):
     if not mat.use_nodes:
         mat.use_nodes = True
 
     configure_alpha_material(mat)
 
-    old_tex = find_image_node(mat)
+    old_tex = find_image_node(mat) if use_textures else None
     had_texture = old_tex is not None
     old_image = old_tex.image if old_tex else None
 
@@ -122,7 +130,7 @@ def setup_prop_alpha_material(mat, images):
 
     out = ensure_output(mat)
 
-    base_img, mask_img = find_base_and_mask(images)
+    base_img, mask_img = find_base_and_mask(images) if use_textures else (None, None)
 
     if base_img is None and had_texture:
         base_img = old_image
@@ -169,6 +177,7 @@ def setup_prop_alpha_material(mat, images):
             alpha_default=0.3733333349227905,
         )
         set_input_default(alpha_node, "Fresnel", 1)
+        set_input_default(alpha_node, "fresnelcolor_factor", 0.35)
         set_input_default(alpha_node, "Spec", 1)
 
     if not alpha_node.node_tree:

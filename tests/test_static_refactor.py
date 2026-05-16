@@ -171,7 +171,17 @@ def test_alpha_materials_disable_transparency_overlap_and_support_no_texture_pro
     assert 'ensure_node_group("ba_weapon_shader")' in prop_source
     assert 'alpha_default=0.3733333349227905' in prop_source
     assert 'set_input_default(alpha_node, "Fresnel", 1)' in prop_source
+    assert 'set_input_default(alpha_node, "fresnelcolor_factor", 0.35)' in prop_source
     assert 'set_input_default(alpha_node, "Spec", 1)' in prop_source
+
+
+def test_car_alpha_uses_no_texture_prop_alpha_branch():
+    prop_source = (ROOT / "ba_props.py").read_text(encoding="utf-8")
+
+    assert "def is_car_alpha_material" in prop_source
+    assert 'mat.name.lower().endswith("_car_alpha")' in prop_source
+    assert "def setup_car_alpha_material" in prop_source
+    assert "setup_prop_alpha_material(mat, images, use_textures=False)" in prop_source
 
 
 def test_prop_material_uses_metallic_shader_pipeline():
@@ -229,6 +239,7 @@ if __name__ == "__main__":
     test_character_material_dispatch_uses_ordered_handler_table()
     test_alpha_materials_use_named_alpha_inputs()
     test_alpha_materials_disable_transparency_overlap_and_support_no_texture_props()
+    test_car_alpha_uses_no_texture_prop_alpha_branch()
     test_prop_material_uses_metallic_shader_pipeline()
     test_feature_modules_use_safe_link_for_node_links()
     test_material_setups_route_through_light_color_node()

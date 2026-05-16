@@ -53,7 +53,9 @@ class BA_OT_setup_prop(Operator):
                     mats.add(slot.material)
                     
         for mat in mats:
-            if ba_props.is_alpha_material(mat):
+            if ba_props.is_car_alpha_material(mat):
+                ba_props.setup_car_alpha_material(mat, images)
+            elif ba_props.is_alpha_material(mat):
                 ba_props.setup_alpha_material(mat, images)
             else:
                 ba_props.setup_prop_material(mat, images)
