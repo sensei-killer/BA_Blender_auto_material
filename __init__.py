@@ -84,6 +84,18 @@ class BA_OT_setup_mouth(Operator):
         return {'FINISHED'}
 
 
+class BA_OT_set_color_management(Operator):
+    bl_idname = "ba.set_color_management"
+    bl_label = "Set color management"
+
+    def execute(self, context):
+        scene = context.scene
+        scene.display_settings.display_device = 'sRGB'
+        scene.view_settings.view_transform = 'Standard'
+        self.report({'INFO'}, "Color Management set to sRGB / Standard")
+        return {'FINISHED'}
+
+
 # ---------------- panel ----------------
 
 class BA_PT_panel(Panel):
@@ -103,6 +115,7 @@ class BA_PT_panel(Panel):
         layout.separator()
 
         layout.operator("ba.setup_mouth", icon='MATERIAL')
+        layout.operator("ba.set_color_management", icon='COLOR')
 
 
 # ---------------- register ----------------
@@ -112,6 +125,7 @@ classes = (
     BA_OT_setup_prop,
     BA_OT_setup_halo,
     BA_OT_setup_mouth,
+    BA_OT_set_color_management,
     BA_PT_panel,
     ba_halo.BA_OT_halo_pick_image,
 )

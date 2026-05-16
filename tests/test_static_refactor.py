@@ -46,6 +46,20 @@ def test_init_only_registers_one_character_setup_operator():
     assert "BA_OT_setup_materials" not in class_names
 
 
+def test_init_exposes_color_management_operator_below_add_mouth():
+    source = (ROOT / "__init__.py").read_text(encoding="utf-8")
+
+    assert "class BA_OT_set_color_management" in source
+    assert 'bl_idname = "ba.set_color_management"' in source
+    assert "scene.display_settings.display_device = 'sRGB'" in source
+    assert "scene.view_settings.view_transform = 'Standard'" in source
+    assert "BA_OT_set_color_management" in source[source.index("classes = ("):]
+
+    mouth_pos = source.index('layout.operator("ba.setup_mouth"')
+    color_pos = source.index('layout.operator("ba.set_color_management"')
+    assert mouth_pos < color_pos
+
+
 def test_duplicate_helpers_are_not_redeclared_in_feature_modules():
     duplicate_helpers = {
         "ensure_node_group",
@@ -207,6 +221,7 @@ def test_material_setups_route_through_light_color_node():
 if __name__ == "__main__":
     test_common_blender_helpers_live_in_utils_module()
     test_init_only_registers_one_character_setup_operator()
+    test_init_exposes_color_management_operator_below_add_mouth()
     test_duplicate_helpers_are_not_redeclared_in_feature_modules()
     test_prop_outline_node_group_name_is_spelled_correctly()
     test_shader_controls_expose_shared_head_control_helper()
