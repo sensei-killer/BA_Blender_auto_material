@@ -5,7 +5,7 @@ from bpy.types import Operator, PropertyGroup
 
 from . import ba_shader_controls
 from . import ba_outline
-from .ba_utils import add_light_color_node, add_lit_alpha_node, clear_nodes, ensure_node_group, ensure_output, link_alpha_to_output, new_tex, safe_link
+from .ba_utils import add_light_color_node, add_lit_alpha_node, clear_nodes, configure_alpha_material, ensure_node_group, ensure_output, link_alpha_to_output, new_tex, safe_link
 
 # -------- utils--------
 def build_import_image_map(images):
@@ -313,7 +313,7 @@ def setup_body_alpha(mat, images):
     tex_body = find_image(images, "Body")
     tex_mask = find_image(images, "Body_Mask")
 
-    mat.surface_render_method = 'BLENDED'
+    configure_alpha_material(mat)
 
     if not tex_body:
         print(f"[BA] Body texture missing: {mat.name}")
@@ -354,7 +354,7 @@ def setup_hair_alpha(mat, images):
     tex_mask = find_image(images, "Hair_Mask")
     tex_spec = find_image(images, "Hair_Spec")
 
-    mat.surface_render_method = 'BLENDED'
+    configure_alpha_material(mat)
 
     if not tex_hair:
         print(f"[BA] Hair texture missing: {mat.name}")

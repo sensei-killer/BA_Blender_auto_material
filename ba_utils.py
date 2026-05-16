@@ -68,6 +68,11 @@ def clear_nodes(mat):
     nt.nodes.clear()
 
 
+def configure_alpha_material(mat):
+    mat.surface_render_method = 'BLENDED'
+    mat.show_transparent_back = False
+
+
 def new_tex(nt, img, non_color=False, loc=(0, 0)):
     if img is None:
         return None

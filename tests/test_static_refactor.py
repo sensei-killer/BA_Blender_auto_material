@@ -33,6 +33,7 @@ def test_common_blender_helpers_live_in_utils_module():
         "add_alpha_node",
         "add_lit_alpha_node",
         "link_alpha_to_output",
+        "configure_alpha_material",
         "import_material",
         "ensure_socket_is_attribute",
     }.issubset(functions)
@@ -138,6 +139,27 @@ def test_alpha_materials_use_named_alpha_inputs():
     assert "alpha_shader.inputs[0]" not in ch_source
 
 
+def test_alpha_materials_disable_transparency_overlap_and_support_no_texture_props():
+    utils_source = (ROOT / "ba_utils.py").read_text(encoding="utf-8")
+    ch_source = (ROOT / "ba_ch_materials.py").read_text(encoding="utf-8")
+    prop_source = (ROOT / "ba_props.py").read_text(encoding="utf-8")
+
+    assert "show_transparent_back = False" in utils_source
+    assert "mat.surface_render_method = 'BLENDED'" in utils_source
+    assert "has_useful_alpha" not in prop_source
+    assert ".pixels" not in prop_source
+
+    assert "configure_alpha_material(mat)" in prop_source
+    assert "configure_alpha_material(mat)" in ch_source
+
+    assert "if base_node:" in prop_source
+    assert "else:" in prop_source
+    assert 'ensure_node_group("ba_weapon_shader")' in prop_source
+    assert 'alpha_default=0.3733333349227905' in prop_source
+    assert 'set_input_default(alpha_node, "Fresnel", 1)' in prop_source
+    assert 'set_input_default(alpha_node, "Spec", 1)' in prop_source
+
+
 def test_prop_material_uses_metallic_shader_pipeline():
     source = (ROOT / "ba_props.py").read_text(encoding="utf-8")
 
@@ -191,6 +213,7 @@ if __name__ == "__main__":
     test_rotation_driver_helpers_guard_against_missing_empty()
     test_character_material_dispatch_uses_ordered_handler_table()
     test_alpha_materials_use_named_alpha_inputs()
+    test_alpha_materials_disable_transparency_overlap_and_support_no_texture_props()
     test_prop_material_uses_metallic_shader_pipeline()
     test_feature_modules_use_safe_link_for_node_links()
     test_material_setups_route_through_light_color_node()
