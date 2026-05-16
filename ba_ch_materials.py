@@ -5,7 +5,7 @@ from bpy.types import Operator, PropertyGroup
 
 from . import ba_shader_controls
 from . import ba_outline
-from .ba_utils import add_light_color_node, clear_nodes, ensure_node_group, ensure_output, new_tex, safe_link
+from .ba_utils import add_light_color_node, add_lit_alpha_node, clear_nodes, ensure_node_group, ensure_output, link_alpha_to_output, new_tex, safe_link
 
 # -------- utils--------
 def build_import_image_map(images):
@@ -322,42 +322,84 @@ def setup_body_alpha(mat, images):
     body = new_tex(nt, tex_body, False, (-800, 100))
     mask = new_tex(nt, tex_mask, True, (-800, -100)) if tex_mask else None
 
-    # ba_body_shader
     body_shader = nt.nodes.new("ShaderNodeGroup")
     body_shader.node_tree = ensure_node_group("ba_body_shader")
     body_shader.location = (-400, 0)
 
-    # ba_alpha
-    alpha_shader = nt.nodes.new("ShaderNodeGroup")
-    alpha_shader.node_tree = ensure_node_group("ba_alpha")
-    alpha_shader.location = (-100, 0)
-
     out = ensure_output(mat)
 
-    # ---- links ----
     safe_link(nt, body.outputs.get('Color'), body_shader.inputs[0])
 
     if mask:
         safe_link(nt, mask.outputs.get('Color'), body_shader.inputs[1])
         safe_link(nt, mask.outputs.get('Alpha'), body_shader.inputs[2])
 
-    #
-    safe_link(
+    _, alpha_shader = add_lit_alpha_node(
         nt,
-        body_shader.outputs[0],
-        alpha_shader.inputs[0]  # ba_alpha 的 Color
+        body_shader.outputs.get('Result', body_shader.outputs[0]),
+        body.outputs.get('Color'),
+        body.outputs.get('Alpha'),
+        light_loc=(-180, 0),
+        alpha_loc=(80, 0),
     )
 
-    safe_link(
+    link_alpha_to_output(nt, alpha_shader, out)
+
+
+def setup_hair_alpha(mat, images):
+    clear_nodes(mat)
+    nt = mat.node_tree
+
+    tex_hair = find_image(images, "Hair")
+    tex_mask = find_image(images, "Hair_Mask")
+    tex_spec = find_image(images, "Hair_Spec")
+
+    mat.surface_render_method = 'BLENDED'
+
+    if not tex_hair:
+        print(f"[BA] Hair texture missing: {mat.name}")
+        return
+
+    hair = new_tex(nt, tex_hair, False, (-800, 200))
+    mask = new_tex(nt, tex_mask, True, (-800, 0)) if tex_mask else None
+    spec = new_tex(nt, tex_spec, True, (-800, -200)) if tex_spec else None
+
+    hair_shader = nt.nodes.new("ShaderNodeGroup")
+    hair_shader.node_tree = ensure_node_group("ba_hair_shader")
+    hair_shader.location = (-400, 0)
+
+    out = ensure_output(mat)
+
+    safe_link(nt, hair.outputs.get('Color'), hair_shader.inputs[0])
+
+    if mask:
+        safe_link(nt, mask.outputs.get('Color'), hair_shader.inputs[1])
+
+    if spec:
+        safe_link(nt, spec.outputs.get('Color'), hair_shader.inputs[2])
+        safe_link(nt, spec.outputs.get('Alpha'), hair_shader.inputs[3])
+
+    _, alpha_shader = add_lit_alpha_node(
         nt,
-        alpha_shader.outputs[0],
-        out.inputs['Surface']
+        hair_shader.outputs.get('Result', hair_shader.outputs[0]),
+        hair.outputs.get('Color'),
+        hair.outputs.get('Alpha'),
+        light_loc=(-180, 0),
+        alpha_loc=(80, 0),
     )
+
+    link_alpha_to_output(nt, alpha_shader, out)
+
+
+def setup_frill_alpha(mat, images):
+    setup_body_alpha(mat, images)
 
 
 CHARACTER_MATERIAL_HANDLERS = (
     ("_Body_Arms", setup_body),
     ("_Body", setup_body),
+    ("_Hair_Alpha", setup_hair_alpha),
+    ("_Frill", setup_frill_alpha),
     ("_Alpha", setup_body_alpha),
     ("_Face", setup_face),
     ("_Hair", setup_hair),

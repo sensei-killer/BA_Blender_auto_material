@@ -89,6 +89,12 @@ def safe_link(nt, out_socket, in_socket):
         nt.links.new(out_socket, in_socket)
 
 
+def set_input_default(node, input_name, value):
+    socket = node.inputs.get(input_name)
+    if socket is not None and value is not None:
+        socket.default_value = value
+
+
 def add_light_color_node(nt, shaded_color_socket, base_color_socket, loc=(40, 0)):
     node = nt.nodes.new("ShaderNodeGroup")
     node.node_tree = ensure_node_group("ba_light_color")
@@ -98,6 +104,67 @@ def add_light_color_node(nt, shaded_color_socket, base_color_socket, loc=(40, 0)
     safe_link(nt, base_color_socket, node.inputs.get("basecolor"))
 
     return node
+
+
+def add_alpha_node(
+    nt,
+    color_socket=None,
+    alpha_socket=None,
+    loc=(-100, 0),
+    color_default=None,
+    alpha_default=None,
+):
+    node = nt.nodes.new("ShaderNodeGroup")
+    node.node_tree = ensure_node_group("ba_alpha")
+    node.location = loc
+
+    if not node.node_tree:
+        return node
+
+    safe_link(nt, color_socket, node.inputs.get("color"))
+    safe_link(nt, alpha_socket, node.inputs.get("alpha"))
+
+    set_input_default(node, "color", color_default)
+    set_input_default(node, "alpha", alpha_default)
+
+    return node
+
+
+def add_lit_alpha_node(
+    nt,
+    shaded_color_socket,
+    base_color_socket,
+    alpha_socket=None,
+    light_loc=(40, 0),
+    alpha_loc=(300, 0),
+    color_default=None,
+    alpha_default=None,
+):
+    light_color = add_light_color_node(
+        nt,
+        shaded_color_socket,
+        base_color_socket,
+        light_loc,
+    )
+
+    alpha_node = add_alpha_node(
+        nt,
+        light_color.outputs.get("Color"),
+        alpha_socket,
+        alpha_loc,
+        color_default=color_default,
+        alpha_default=alpha_default,
+    )
+
+    return light_color, alpha_node
+
+
+def link_alpha_to_output(nt, alpha_node, output_node):
+    safe_link(
+        nt,
+        alpha_node.outputs.get("Shader", alpha_node.outputs[0]),
+        output_node.inputs.get("Surface"),
+    )
 
 
 def remove_existing_nodes_modifier(obj, node_group_name):

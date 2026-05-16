@@ -3,7 +3,7 @@ import os
 from bpy.types import Operator, PropertyGroup
 from bpy.props import CollectionProperty, StringProperty
 
-from .ba_utils import add_light_color_node, clear_nodes, ensure_node_group, ensure_output, new_tex, safe_link
+from .ba_utils import add_alpha_node, add_light_color_node, add_lit_alpha_node, clear_nodes, ensure_node_group, ensure_output, link_alpha_to_output, new_tex, safe_link
 
 # ---------------- utils ----------------
 
@@ -104,11 +104,14 @@ def setup_prop_material(mat, images):
 
 
 def setup_alpha_material(mat, images):
+    setup_prop_alpha_material(mat, images)
+
+
+def setup_prop_alpha_material(mat, images):
     if not mat.use_nodes:
         mat.use_nodes = True
 
     mat.surface_render_method = 'BLENDED'
-
 
     old_tex = find_image_node(mat)
     had_texture = old_tex is not None
@@ -119,45 +122,47 @@ def setup_alpha_material(mat, images):
 
     out = ensure_output(mat)
 
-    tex_node = None
+    base_img, mask_img = find_base_and_mask(images)
 
+    if base_img is None and had_texture:
+        base_img = old_image
 
-    if had_texture:
+    base_node = None
+    mask_node = None
 
-        base_img, _ = find_base_and_mask(images)
+    if base_img:
+        base_node = new_tex(nt, base_img, non_color=False, loc=(-620, 0))
 
-        if base_img is None:
-            base_img = old_image
+    if mask_img:
+        mask_node = new_tex(nt, mask_img, non_color=True, loc=(-620, -280))
 
-        if base_img:
-            tex_node = new_tex(
-                nt,
-                base_img,
-                non_color=False,
-                loc=(-400, 0)
-            )
+    if base_node:
+        weapon_node = nt.nodes.new("ShaderNodeGroup")
+        weapon_group = ensure_node_group("ba_weapon_shader")
+        if not weapon_group:
+            print(f"[BA] Node group 'ba_weapon_shader' not found for {mat.name}")
+            return
 
-    # --------------------------------
-    # ba_alpha
-    # --------------------------------
-    alpha_node = nt.nodes.new("ShaderNodeGroup")
-    ng = ensure_node_group("ba_alpha")
-    if not ng:
+        weapon_node.node_tree = weapon_group
+        weapon_node.location = (-280, 0)
+
+        safe_link(nt, base_node.outputs.get("Color"), weapon_node.inputs.get("Base_Color"))
+        if mask_node:
+            safe_link(nt, mask_node.outputs.get("Color"), weapon_node.inputs.get("Mask"))
+
+        _, alpha_node = add_lit_alpha_node(
+            nt,
+            weapon_node.outputs.get("Result"),
+            base_node.outputs.get("Color"),
+            base_node.outputs.get("Alpha"),
+            light_loc=(-90, 0),
+            alpha_loc=(90, 0),
+        )
+    else:
+        alpha_node = add_alpha_node(nt, loc=(90, 0), alpha_default=1.0)
+
+    if not alpha_node.node_tree:
         print(f"[BA] Node group 'ba_alpha' not found for {mat.name}")
         return
 
-    alpha_node.node_tree = ng
-    alpha_node.location = (-100, 0)
-
-
-    if tex_node:
-        if "Color" in tex_node.outputs and len(alpha_node.inputs) > 0:
-            safe_link(nt, tex_node.outputs.get("Color"), alpha_node.inputs[0])
-
-        if "Alpha" in tex_node.outputs and len(alpha_node.inputs) > 1:
-            safe_link(nt, tex_node.outputs.get("Alpha"), alpha_node.inputs[1])
-
-    # --------------------------------
-    # output
-    # --------------------------------
-    safe_link(nt, alpha_node.outputs[0], out.inputs.get("Surface"))
+    link_alpha_to_output(nt, alpha_node, out)

@@ -30,6 +30,9 @@ def test_common_blender_helpers_live_in_utils_module():
         "new_tex",
         "safe_link",
         "add_light_color_node",
+        "add_alpha_node",
+        "add_lit_alpha_node",
+        "link_alpha_to_output",
         "import_material",
         "ensure_socket_is_attribute",
     }.issubset(functions)
@@ -97,6 +100,8 @@ def test_character_material_dispatch_uses_ordered_handler_table():
     expected_order = [
         '"_Body_Arms"',
         '"_Body"',
+        '"_Hair_Alpha"',
+        '"_Frill"',
         '"_Alpha"',
         '"_Face"',
         '"_Hair"',
@@ -108,6 +113,29 @@ def test_character_material_dispatch_uses_ordered_handler_table():
 
     assert positions == sorted(positions)
     assert "setup_character_material(mat, images)" in source
+
+
+def test_alpha_materials_use_named_alpha_inputs():
+    utils_source = (ROOT / "ba_utils.py").read_text(encoding="utf-8")
+    ch_source = (ROOT / "ba_ch_materials.py").read_text(encoding="utf-8")
+    prop_source = (ROOT / "ba_props.py").read_text(encoding="utf-8")
+
+    assert 'inputs.get("color")' in utils_source
+    assert 'inputs.get("alpha")' in utils_source
+    assert 'outputs.get("Shader", alpha_node.outputs[0])' in utils_source
+    assert "def link_alpha_to_output" in utils_source
+
+    assert "def setup_prop_alpha_material" in prop_source
+    assert "add_lit_alpha_node" in prop_source
+    assert "link_alpha_to_output" in prop_source
+    assert 'weapon_node.outputs.get("Result")' in prop_source
+    assert 'base_node.outputs.get("Alpha")' in prop_source
+
+    assert "def setup_hair_alpha" in ch_source
+    assert "def setup_frill_alpha" in ch_source
+    assert "add_lit_alpha_node" in ch_source
+    assert "link_alpha_to_output" in ch_source
+    assert "alpha_shader.inputs[0]" not in ch_source
 
 
 def test_prop_material_uses_metallic_shader_pipeline():
@@ -162,6 +190,7 @@ if __name__ == "__main__":
     test_shader_controls_expose_shared_head_control_helper()
     test_rotation_driver_helpers_guard_against_missing_empty()
     test_character_material_dispatch_uses_ordered_handler_table()
+    test_alpha_materials_use_named_alpha_inputs()
     test_prop_material_uses_metallic_shader_pipeline()
     test_feature_modules_use_safe_link_for_node_links()
     test_material_setups_route_through_light_color_node()
