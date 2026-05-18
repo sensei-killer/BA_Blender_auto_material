@@ -112,6 +112,13 @@ def migrate_meshes(source, generated_rig, meshes):
     run_script_text(MIGRATE_SCRIPT)
 
 
+def hide_setup_armatures(source, metarig):
+    for obj in (source, metarig):
+        obj.hide_set(True)
+        obj.hide_viewport = True
+        obj.hide_render = True
+
+
 def main():
     source, meshes = require_selection()
     print("\n=== Auto Rigify bind pipeline ===")
@@ -125,7 +132,10 @@ def main():
     print(f"Generated Rigify rig: {generated_rig.name}")
 
     migrate_meshes(source, generated_rig, meshes)
+    hide_setup_armatures(source, metarig)
+    select_only([generated_rig] + meshes, active=generated_rig)
     print("Migration completed")
+    print(f"Hidden setup armatures: {source.name}, {metarig.name}")
     print("=== End Auto Rigify bind pipeline ===\n")
 
 
