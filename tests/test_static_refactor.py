@@ -112,12 +112,25 @@ def test_shader_controls_expose_shared_head_control_helper():
     assert "def ensure_head_control" in source
     assert "def ensure_hair_spec_control" in source
     assert "def ensure_face_light_dot_control" in source
+    assert "RIGIFY_HEAD_BONE_CANDIDATES" in source
+    assert '"head"' in source
+    assert '"DEF-spine.006"' in source
+    assert "mod.type == 'ARMATURE'" in source
+    assert "def retarget_shader_controls_to_rig" in source
 
 
 def test_rotation_driver_helpers_guard_against_missing_empty():
     source = (ROOT / "ba_shader_controls.py").read_text(encoding="utf-8")
 
     assert "if empty is None:" in source
+
+
+def test_rigify_migration_retargets_shader_control_empties():
+    source = (ROOT / "migrate_body_to_rig_auto.py").read_text(encoding="utf-8")
+
+    assert "ba_shader_controls.retarget_shader_controls_to_rig" in source
+    assert "def retarget_shader_control_empties" in source
+    assert "retarget_shader_control_empties(bpy.context, target, [mesh] + extra_meshes)" in source
 
 
 def test_character_material_dispatch_uses_ordered_handler_table():

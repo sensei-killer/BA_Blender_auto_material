@@ -1,6 +1,14 @@
 import bpy
 from mathutils import Matrix
 
+try:
+    from . import ba_shader_controls
+except Exception:
+    try:
+        import ba_shader_controls
+    except Exception:
+        ba_shader_controls = None
+
 # Migrate the selected body mesh from the selected original armature to the
 # selected generated Rigify armature.
 #
@@ -471,6 +479,33 @@ def retarget_mesh_to_target(mesh, source, target):
         report["parenting"].append(f"{mesh.name} parent cleared with world transform preserved")
 
 
+def retarget_shader_control_empties(context, target, meshes):
+    if ba_shader_controls is None:
+        report["warnings"].append("ba_shader_controls module unavailable; skipped shader control retarget")
+        return
+
+    old_active = bpy.context.view_layer.objects.active
+    old_selected = list(bpy.context.selected_objects)
+    bpy.ops.object.mode_set(mode="OBJECT")
+    bpy.ops.object.select_all(action="DESELECT")
+    for mesh in meshes:
+        mesh.select_set(True)
+    bpy.context.view_layer.objects.active = meshes[0] if meshes else target
+
+    hair_empty, face_empty = ba_shader_controls.retarget_shader_controls_to_rig(context, target)
+    if hair_empty:
+        report["parenting"].append(f"{hair_empty.name} retargeted to {target.name}")
+    if face_empty:
+        report["parenting"].append(f"{face_empty.name} retargeted to {target.name}")
+
+    bpy.ops.object.select_all(action="DESELECT")
+    for obj in old_selected:
+        if obj.name in bpy.data.objects:
+            obj.select_set(True)
+    if old_active and old_active.name in bpy.data.objects:
+        bpy.context.view_layer.objects.active = old_active
+
+
 def dedupe_report():
     for key, values in report.items():
         seen = set()
@@ -525,6 +560,7 @@ def main():
     retarget_mesh_to_target(mesh, source, target)
     for extra_mesh in extra_meshes:
         retarget_mesh_to_target(extra_mesh, source, target)
+    retarget_shader_control_empties(bpy.context, target, [mesh] + extra_meshes)
     reparent_source_children(source, target, [mesh] + extra_meshes, old_to_new_body)
 
     print_report()

@@ -4,25 +4,44 @@ import bpy
 CONTROL_EMPTY_NAME = "hair_spec_normal"
 CONTROL_EMPTY_NAME_FACE = "face_light_dot"
 
+RIGIFY_HEAD_BONE_CANDIDATES = (
+    "head",
+    "DEF-spine.006",
+    "ORG-spine.006",
+    "spine.006",
+    "Bip001 Head",
+)
+
 
 def find_rig_from_objects(objs):
     for obj in objs:
         if obj.type == 'ARMATURE':
             return obj
+        for mod in obj.modifiers:
+            if mod.type == 'ARMATURE' and mod.object:
+                return mod.object
         if obj.parent and obj.parent.type == 'ARMATURE':
             return obj.parent
     return None
 
 
 def find_head_bone(rig):
+    if rig is None or rig.type != 'ARMATURE':
+        return None
+
+    for name in RIGIFY_HEAD_BONE_CANDIDATES:
+        if rig.data.bones.get(name):
+            return name
+
     for bone in rig.data.bones:
         if bone.name.endswith("Head"):
             return bone.name
     return None
 
 
-def ensure_head_control(context, empty_name):
-    rig = find_rig_from_objects(context.selected_objects)
+def ensure_head_control(context, empty_name, rig=None):
+    if rig is None:
+        rig = find_rig_from_objects(context.selected_objects)
     if rig is None:
         return None
 
@@ -68,6 +87,16 @@ def ensure_hair_spec_control(context):
 
 def ensure_face_light_dot_control(context):
     return ensure_head_control(context, CONTROL_EMPTY_NAME_FACE)
+
+
+def retarget_shader_controls_to_rig(context, rig):
+    hair_empty = ensure_head_control(context, CONTROL_EMPTY_NAME, rig=rig)
+    face_empty = ensure_head_control(context, CONTROL_EMPTY_NAME_FACE, rig=rig)
+
+    add_hair_rotation_drivers(hair_empty, context)
+    add_face_rotation_drivers(face_empty, context)
+
+    return hair_empty, face_empty
 
 
 def _find_rotation_shader_node(mat, node_group_name):
