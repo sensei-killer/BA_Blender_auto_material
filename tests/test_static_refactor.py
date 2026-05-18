@@ -46,6 +46,13 @@ def test_init_only_registers_one_character_setup_operator():
     assert "BA_OT_setup_materials" not in class_names
 
 
+def test_init_declares_blender_42_minimum_version():
+    init_tree = module_tree("__init__.py")
+    bl_info = ast.literal_eval(init_tree.body[0].value)
+
+    assert bl_info["blender"] == (4, 2, 0)
+
+
 def test_init_exposes_color_management_operator_below_add_mouth():
     source = (ROOT / "__init__.py").read_text(encoding="utf-8")
 
@@ -131,6 +138,30 @@ def test_rigify_migration_retargets_shader_control_empties():
     assert "ba_shader_controls.retarget_shader_controls_to_rig" in source
     assert "def retarget_shader_control_empties" in source
     assert "retarget_shader_control_empties(bpy.context, target, [mesh] + extra_meshes)" in source
+
+
+def test_rigify_migration_scores_body_mesh_without_selection_order():
+    source = (ROOT / "migrate_body_to_rig_auto.py").read_text(encoding="utf-8")
+
+    assert "def body_mesh_score" in source
+    assert "def choose_body_mesh" in source
+    assert "BODY_MESH_SCORE_TIE_MARGIN" in source
+    assert "BODY_BONE_TO_DEF" in source[source.index("def body_mesh_score"):]
+    assert "BODY_HELPER_TO_BODY" in source[source.index("def body_mesh_score"):]
+    assert "body_candidates = sorted(" in source
+
+
+def test_rigify_migration_skips_unbound_selected_meshes():
+    source = (ROOT / "migrate_body_to_rig_auto.py").read_text(encoding="utf-8")
+
+    assert '"skipped_unbound_meshes": []' in source
+    assert "def has_source_armature_modifier" in source
+    assert "modifier_extra_meshes" in source
+    assert "parented_extra_meshes" in source
+    assert "unbound_meshes" in source
+    assert "for extra_mesh in modifier_extra_meshes:" in source
+    assert "retarget_mesh_to_target(extra_mesh, source, target)" in source
+    assert "for extra_mesh in extra_meshes:" not in source
 
 
 def test_character_material_dispatch_uses_ordered_handler_table():
@@ -258,11 +289,15 @@ def test_material_setups_route_through_light_color_node():
 if __name__ == "__main__":
     test_common_blender_helpers_live_in_utils_module()
     test_init_only_registers_one_character_setup_operator()
+    test_init_declares_blender_42_minimum_version()
     test_init_exposes_color_management_operator_below_add_mouth()
     test_duplicate_helpers_are_not_redeclared_in_feature_modules()
     test_prop_outline_node_group_name_is_spelled_correctly()
     test_shader_controls_expose_shared_head_control_helper()
     test_rotation_driver_helpers_guard_against_missing_empty()
+    test_rigify_migration_retargets_shader_control_empties()
+    test_rigify_migration_scores_body_mesh_without_selection_order()
+    test_rigify_migration_skips_unbound_selected_meshes()
     test_character_material_dispatch_uses_ordered_handler_table()
     test_alpha_materials_use_named_alpha_inputs()
     test_alpha_materials_disable_transparency_overlap_and_support_no_texture_props()
