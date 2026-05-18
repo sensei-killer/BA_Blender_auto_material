@@ -135,9 +135,13 @@ def has_any_armature_modifier_from(mesh, armatures):
     return any(mod.type == "ARMATURE" and mod.object in armatures for mod in mesh.modifiers)
 
 
+def body_group_names():
+    return set(BODY_BONE_TO_DEF) | set(BODY_BONE_TO_DEF.values()) | set(BODY_HELPER_TO_BODY)
+
+
 def body_mesh_score(mesh):
     group_names = {group.name for group in mesh.vertex_groups}
-    body_groups = set(BODY_BONE_TO_DEF) | set(BODY_HELPER_TO_BODY)
+    body_groups = body_group_names()
     score = len(group_names & body_groups)
     if "Bip001" in group_names:
         score += 1
@@ -289,7 +293,15 @@ def resolve_scene_objects_from_selection():
 
 
 def resolve_scene_objects():
-    return resolve_scene_objects_from_context() or resolve_scene_objects_from_selection()
+    context_result = resolve_scene_objects_from_context()
+    if context_result is not None:
+        return context_result
+    if "BA_SOURCE_ARMATURE" in globals():
+        raise RuntimeError(
+            "Could not resolve explicit Rigify migration context. "
+            "The selected body mesh may no longer contain recognizable old Bip001 or target DEF body vertex groups."
+        )
+    return resolve_scene_objects_from_selection()
 
 
 def target_def_bones(target):
