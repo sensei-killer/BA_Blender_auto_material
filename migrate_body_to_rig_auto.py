@@ -1,13 +1,26 @@
 import bpy
+import importlib.util
+from pathlib import Path
 from mathutils import Matrix
 
-try:
-    from . import ba_shader_controls
-except Exception:
+def load_ba_shader_controls_module():
     try:
-        import ba_shader_controls
-    except Exception:
-        ba_shader_controls = None
+        from . import ba_shader_controls
+        return ba_shader_controls, None
+    except Exception as package_error:
+        module_path = Path(__file__).resolve().parent / "ba_shader_controls.py"
+        try:
+            spec = importlib.util.spec_from_file_location("ba_shader_controls", module_path)
+            if spec is None or spec.loader is None:
+                return None, f"Could not create import spec for {module_path}"
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            return module, None
+        except Exception as file_error:
+            return None, f"package import failed: {package_error}; file import failed: {file_error}"
+
+
+ba_shader_controls, BA_SHADER_CONTROLS_LOAD_ERROR = load_ba_shader_controls_module()
 
 # Migrate the selected body mesh from the selected original armature to the
 # selected generated Rigify armature.
@@ -481,7 +494,10 @@ def retarget_mesh_to_target(mesh, source, target):
 
 def retarget_shader_control_empties(context, target, meshes):
     if ba_shader_controls is None:
-        report["warnings"].append("ba_shader_controls module unavailable; skipped shader control retarget")
+        report["warnings"].append(
+            "ba_shader_controls module unavailable; skipped shader control retarget"
+            f" ({BA_SHADER_CONTROLS_LOAD_ERROR})"
+        )
         return
 
     old_active = bpy.context.view_layer.objects.active
