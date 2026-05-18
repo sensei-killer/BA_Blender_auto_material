@@ -39,6 +39,18 @@ def find_head_bone(rig):
     return None
 
 
+def configure_rotation_only_child_of(constraint):
+    constraint.use_location_x = False
+    constraint.use_location_y = False
+    constraint.use_location_z = False
+    constraint.use_rotation_x = True
+    constraint.use_rotation_y = True
+    constraint.use_rotation_z = True
+    constraint.use_scale_x = False
+    constraint.use_scale_y = False
+    constraint.use_scale_z = False
+
+
 def ensure_head_control(context, empty_name, rig=None):
     if rig is None:
         rig = find_rig_from_objects(context.selected_objects)
@@ -77,6 +89,7 @@ def ensure_head_control(context, empty_name, rig=None):
         child_of = empty.constraints.new(type='CHILD_OF')
     child_of.target = rig
     child_of.subtarget = head_bone
+    configure_rotation_only_child_of(child_of)
 
     return empty
 
