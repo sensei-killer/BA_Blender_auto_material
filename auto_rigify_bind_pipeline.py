@@ -50,9 +50,11 @@ def select_only(objects, active=None):
     bpy.context.view_layer.objects.active = active or (objects[0] if objects else None)
 
 
-def run_script_text(name):
+def run_script_text(name, extra_namespace=None):
     script = load_script(name)
     namespace = {"__name__": "__main__", "__file__": str(script_dir() / name)}
+    if extra_namespace:
+        namespace.update(extra_namespace)
     exec(compile(script, name, "exec"), namespace)
     return namespace
 
@@ -109,7 +111,14 @@ def generate_rigify_rig(metarig, source):
 
 def migrate_meshes(source, generated_rig, meshes):
     select_only([source, generated_rig] + meshes, active=meshes[0])
-    run_script_text(MIGRATE_SCRIPT)
+    run_script_text(
+        MIGRATE_SCRIPT,
+        {
+            "BA_SOURCE_ARMATURE": source,
+            "BA_TARGET_ARMATURE": generated_rig,
+            "BA_SELECTED_MESHES": meshes,
+        },
+    )
 
 
 def hide_setup_armatures(source, metarig):

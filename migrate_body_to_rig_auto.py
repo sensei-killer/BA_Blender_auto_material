@@ -167,7 +167,66 @@ def choose_body_mesh(meshes):
     return body_mesh
 
 
-def resolve_scene_objects():
+def classify_scene_objects(source, target, meshes):
+    if source is None or target is None or not meshes:
+        return None
+
+    bound_meshes = [
+        mesh
+        for mesh in meshes
+        if has_source_armature_modifier(mesh, source) or mesh.parent == source
+    ]
+    body_mesh = choose_body_mesh(bound_meshes) or choose_body_mesh(meshes)
+    if body_mesh is None:
+        return None
+
+    modifier_extra_meshes = [
+        mesh
+        for mesh in meshes
+        if mesh != body_mesh and has_source_armature_modifier(mesh, source)
+    ]
+    parented_extra_meshes = [
+        mesh
+        for mesh in meshes
+        if mesh != body_mesh and mesh not in modifier_extra_meshes and mesh.parent == source
+    ]
+    unbound_meshes = [
+        mesh
+        for mesh in meshes
+        if mesh != body_mesh
+        and mesh not in modifier_extra_meshes
+        and mesh not in parented_extra_meshes
+        and not has_any_armature_modifier_from(mesh, [source, target])
+    ]
+    for mesh in unbound_meshes:
+        report["skipped_unbound_meshes"].append(mesh.name)
+
+    return source, target, body_mesh, modifier_extra_meshes, parented_extra_meshes, unbound_meshes
+
+
+def resolve_scene_objects_from_context():
+    source = globals().get("BA_SOURCE_ARMATURE")
+    target = globals().get("BA_TARGET_ARMATURE")
+    meshes = globals().get("BA_SELECTED_MESHES")
+    if source is None or target is None or meshes is None:
+        return None
+
+    meshes = [mesh for mesh in meshes if mesh and mesh.name in bpy.data.objects and mesh.type == "MESH"]
+    result = classify_scene_objects(source, target, meshes)
+    if result is None:
+        return None
+
+    source, target, body_mesh, modifier_extra_meshes, parented_extra_meshes, unbound_meshes = result
+    report["warnings"].append(
+        f"Using explicit context: source={source.name}, target={target.name}, body_mesh={body_mesh.name}, "
+        f"modifier_extra_meshes={[mesh.name for mesh in modifier_extra_meshes]}, "
+        f"parented_extra_meshes={[mesh.name for mesh in parented_extra_meshes]}, "
+        f"unbound_meshes={[mesh.name for mesh in unbound_meshes]}"
+    )
+    return result
+
+
+def resolve_scene_objects_from_selection():
     selected = list(bpy.context.selected_objects)
     meshes = [obj for obj in selected if obj.type == "MESH"]
     armatures = [obj for obj in selected if obj.type == "ARMATURE"]
@@ -210,42 +269,15 @@ def resolve_scene_objects():
             target = with_def[0]
             source = next(arm for arm in armatures if arm != target)
 
-    if source is not None:
-        bound_meshes = [
-            mesh
-            for mesh in meshes
-            if has_source_armature_modifier(mesh, source) or mesh.parent == source
-        ]
-        body_mesh = choose_body_mesh(bound_meshes) or choose_body_mesh(meshes)
-
-    if source is None or target is None or body_mesh is None:
+    result = classify_scene_objects(source, target, meshes) if source is not None and target is not None else None
+    if result is None:
         raise RuntimeError(
             "Could not infer source and target armatures from selection. "
             "Select the body mesh with BA body vertex groups, plus old source armature, new Rigify rig, "
             "and optional bound extras/unbound props."
         )
 
-    modifier_extra_meshes = [
-        mesh
-        for mesh in meshes
-        if mesh != body_mesh and has_source_armature_modifier(mesh, source)
-    ]
-    parented_extra_meshes = [
-        mesh
-        for mesh in meshes
-        if mesh != body_mesh and mesh not in modifier_extra_meshes and mesh.parent == source
-    ]
-    unbound_meshes = [
-        mesh
-        for mesh in meshes
-        if mesh != body_mesh
-        and mesh not in modifier_extra_meshes
-        and mesh not in parented_extra_meshes
-        and not has_any_armature_modifier_from(mesh, armatures)
-    ]
-    extra_meshes = modifier_extra_meshes + parented_extra_meshes
-    for mesh in unbound_meshes:
-        report["skipped_unbound_meshes"].append(mesh.name)
+    source, target, body_mesh, modifier_extra_meshes, parented_extra_meshes, unbound_meshes = result
 
     report["warnings"].append(
         f"Using selection: source={source.name}, target={target.name}, body_mesh={body_mesh.name}, "
@@ -254,6 +286,10 @@ def resolve_scene_objects():
         f"unbound_meshes={[mesh.name for mesh in unbound_meshes]}"
     )
     return source, target, body_mesh, modifier_extra_meshes, parented_extra_meshes, unbound_meshes
+
+
+def resolve_scene_objects():
+    return resolve_scene_objects_from_context() or resolve_scene_objects_from_selection()
 
 
 def target_def_bones(target):
