@@ -18,6 +18,7 @@ from . import ba_halo
 from . import ba_mouth
 from . import ba_ch_materials
 from . import ba_rigify
+from .ba_utils import refresh_view_layer
 
 # ---------------- operator ----------------
 
@@ -63,6 +64,7 @@ class BA_OT_setup_prop(Operator):
 
             
         ba_props_outline.add_ba_props_outline(context)
+        refresh_view_layer(context)
 
         self.report({'INFO'}, "Setup Prop")
         return {'FINISHED'}

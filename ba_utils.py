@@ -73,6 +73,10 @@ def configure_alpha_material(mat):
     mat.show_transparent_back = False
 
 
+def refresh_view_layer(context):
+    context.view_layer.update()
+
+
 def new_tex(nt, img, non_color=False, loc=(0, 0)):
     if img is None:
         return None

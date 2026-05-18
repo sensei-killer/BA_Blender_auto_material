@@ -5,7 +5,7 @@ from bpy.types import Operator, PropertyGroup
 
 from . import ba_shader_controls
 from . import ba_outline
-from .ba_utils import add_light_color_node, add_lit_alpha_node, clear_nodes, configure_alpha_material, ensure_node_group, ensure_output, link_alpha_to_output, new_tex, safe_link
+from .ba_utils import add_light_color_node, add_lit_alpha_node, clear_nodes, configure_alpha_material, ensure_node_group, ensure_output, link_alpha_to_output, new_tex, refresh_view_layer, safe_link
 
 # -------- utils--------
 def build_import_image_map(images):
@@ -459,5 +459,6 @@ class BA_OT_setup_materials(Operator):
         ba_shader_controls.add_hair_rotation_drivers(empty, context)
 
         ba_outline.add_ba_outline(context)
+        refresh_view_layer(context)
 
         return {'FINISHED'}
