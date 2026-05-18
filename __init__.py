@@ -17,6 +17,7 @@ from . import ba_props_outline
 from . import ba_halo
 from . import ba_mouth
 from . import ba_ch_materials
+from . import ba_rigify
 
 # ---------------- operator ----------------
 
@@ -98,6 +99,16 @@ class BA_OT_set_color_management(Operator):
         return {'FINISHED'}
 
 
+class BA_OT_convert_to_rigify(Operator):
+    bl_idname = "ba.convert_to_rigify"
+    bl_label = "Convert to Rigify"
+
+    def execute(self, context):
+        ba_rigify.run_convert_to_rigify()
+        self.report({'INFO'}, "Converted selection to Rigify")
+        return {'FINISHED'}
+
+
 # ---------------- panel ----------------
 
 class BA_PT_panel(Panel):
@@ -117,6 +128,7 @@ class BA_PT_panel(Panel):
         layout.separator()
 
         layout.operator("ba.setup_mouth", icon='MATERIAL')
+        layout.operator("ba.convert_to_rigify", icon='ARMATURE_DATA')
         layout.operator("ba.set_color_management", icon='COLOR')
 
 
@@ -127,6 +139,7 @@ classes = (
     BA_OT_setup_prop,
     BA_OT_setup_halo,
     BA_OT_setup_mouth,
+    BA_OT_convert_to_rigify,
     BA_OT_set_color_management,
     BA_PT_panel,
     ba_halo.BA_OT_halo_pick_image,

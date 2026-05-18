@@ -60,6 +60,20 @@ def test_init_exposes_color_management_operator_below_add_mouth():
     assert mouth_pos < color_pos
 
 
+def test_init_exposes_convert_to_rigify_below_add_mouth():
+    source = (ROOT / "__init__.py").read_text(encoding="utf-8")
+
+    assert "class BA_OT_convert_to_rigify" in source
+    assert 'bl_idname = "ba.convert_to_rigify"' in source
+    assert "ba_rigify.run_convert_to_rigify()" in source
+    assert "BA_OT_convert_to_rigify" in source[source.index("classes = ("):]
+
+    mouth_pos = source.index('layout.operator("ba.setup_mouth"')
+    rigify_pos = source.index('layout.operator("ba.convert_to_rigify"')
+    color_pos = source.index('layout.operator("ba.set_color_management"')
+    assert mouth_pos < rigify_pos < color_pos
+
+
 def test_duplicate_helpers_are_not_redeclared_in_feature_modules():
     duplicate_helpers = {
         "ensure_node_group",
