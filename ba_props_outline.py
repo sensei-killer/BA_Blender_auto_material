@@ -41,6 +41,12 @@ def build_outline_vertex_group(obj):
     return vg
 
 
+def refresh_modifier_viewport(obj, mod):
+    mod.show_viewport = False
+    mod.show_viewport = True
+    obj.update_tag()
+
+
 # ------------------------------------------------------------
 # geometry nodes helpers
 # ------------------------------------------------------------
@@ -83,7 +89,7 @@ def setup_prop_outline_geometry_nodes(obj):
         name = item.name
         ident = item.identifier
 
-        # Group → Attribute
+        # Group Attribute
         if name == "Group" and vg:
             ensure_socket_is_attribute(obj, mod, ident)
             mod[f"{ident}_attribute_name"] = vg.name
@@ -101,6 +107,7 @@ def setup_prop_outline_geometry_nodes(obj):
                 mod[ident] = alpha_mat
             continue
 
+    refresh_modifier_viewport(obj, mod)
     return True
 
 

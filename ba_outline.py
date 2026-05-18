@@ -48,6 +48,12 @@ def build_outline_vertex_group(obj):
     return vg
 
 
+def refresh_modifier_viewport(obj, mod):
+    mod.show_viewport = False
+    mod.show_viewport = True
+    obj.update_tag()
+
+
 # ------------------------------------------------------------
 # Geometry Nodes setup
 # ------------------------------------------------------------
@@ -115,6 +121,7 @@ def setup_outline_geometry_nodes(obj):
 
 
 
+    refresh_modifier_viewport(obj, mod)
     return True
 
 
