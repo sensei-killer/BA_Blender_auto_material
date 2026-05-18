@@ -3,26 +3,16 @@ import os
 from bpy.types import Operator, PropertyGroup
 from bpy.props import CollectionProperty, StringProperty
 
+from .ba_utils import add_alpha_node, add_light_color_node, add_lit_alpha_node, clear_nodes, configure_alpha_material, ensure_node_group, ensure_output, link_alpha_to_output, new_tex, safe_link, set_input_default
+
 # ---------------- utils ----------------
-
-def ensure_node_group(group_name):
-    if group_name in bpy.data.node_groups:
-        return bpy.data.node_groups[group_name]
-
-    addon_dir = os.path.dirname(__file__)
-    blend_path = os.path.join(addon_dir, "shaders", "ba_node_groups.blend")
-
-    with bpy.data.libraries.load(blend_path, link=False) as (data_from, data_to):
-        if group_name in data_from.node_groups:
-            data_to.node_groups = [group_name]
-        else:
-            print(f"[BA] Node group not found: {group_name}")
-            return None
-
-    return bpy.data.node_groups.get(group_name)
 
 def is_alpha_material(mat):
     return mat.name.lower().endswith("_alpha")
+
+
+def is_car_alpha_material(mat):
+    return mat.name.lower().endswith("_car_alpha")
 
 def find_image_node(mat):
     if not mat.use_nodes:
@@ -33,40 +23,15 @@ def find_image_node(mat):
             return n
     return None
 
-
-
-def ensure_output(mat):
-    nt = mat.node_tree
-    out = nt.nodes.get("Material Output")
-    if not out:
-        out = nt.nodes.new("ShaderNodeOutputMaterial")
-        out.location = (400, 0)
-    return out
-
-
-def clear_nodes(mat):
-    nt = mat.node_tree
-    nt.nodes.clear()
-
-
-def new_tex(nt, img, non_color=False, loc=(0, 0)):
-    if img is None:
-        return None    
-    n = nt.nodes.new("ShaderNodeTexImage")
-    n.image = img
-    if n.image:
-            n.image.alpha_mode = 'CHANNEL_PACKED'
-    if non_color:
-        n.image.colorspace_settings.name = 'Non-Color'
-    n.location = loc
-    return n
-
 def find_base_and_mask(images):
     base = None
     mask = None
 
     for img in images:
-        name = os.path.splitext(os.path.basename(img.name))[0].lower()
+        if img.filepath:
+            name = os.path.splitext(os.path.basename(bpy.path.abspath(img.filepath)))[0].lower()
+        else:
+            name = os.path.splitext(os.path.basename(img.name))[0].lower()
 
         if name.endswith("mask"):
             if mask is None:
@@ -100,52 +65,63 @@ def setup_prop_material(mat, images):
     if mask_img:
         mask_node = new_tex(nt, mask_img, non_color=True, loc=(-600, -100))
 
-    # --- Shader Group ---
-    shader_node = nt.nodes.new("ShaderNodeGroup")
-    ng = ensure_node_group("ba_weapon_shader")
-    if not ng:
+    # --- Shader Groups ---
+    weapon_node = nt.nodes.new("ShaderNodeGroup")
+    weapon_group = ensure_node_group("ba_weapon_shader")
+    if not weapon_group:
         print(f"[BA] Node group 'ba_weapon_shader' not found for {mat.name}")
         return
-    shader_node.node_tree = ng
-    shader_node.location = (-200, 0)
+
+    metallic_node = nt.nodes.new("ShaderNodeGroup")
+    metallic_group = ensure_node_group("ba_metallic_shader")
+    if not metallic_group:
+        print(f"[BA] Node group 'ba_metallic_shader' not found for {mat.name}")
+        return
+
+    weapon_node.node_tree = weapon_group
+    weapon_node.location = (-200, 100)
+
+    metallic_node.node_tree = metallic_group
+    light_color = add_light_color_node(
+        nt,
+        weapon_node.outputs.get("Result"),
+        base_node.outputs.get("Color"),
+        (60, 100)
+    )
+
+    metallic_node.location = (320, 100)
 
     # --- Output ---
     output_node = ensure_output(mat)
 
-    # ---  Base ---
-    try:
-        if "Base_Color" in shader_node.inputs:
-            nt.links.new(base_node.outputs['Color'], shader_node.inputs['Base_Color'])
-        else:
-            nt.links.new(base_node.outputs['Color'], shader_node.inputs[0])
-    except Exception as e:
-        print(f"[BA] Failed to link base for {mat.name}: {e}")
+    # --- Links ---
+    safe_link(nt, base_node.outputs.get("Color"), weapon_node.inputs.get("Base_Color"))
+    safe_link(nt, base_node.outputs.get("Color"), metallic_node.inputs.get("Base_Color"))
 
-    # ---  Mask ---
     if mask_node:
-        mask_input = shader_node.inputs.get("Mask")
-        if mask_input:
-            try:
-                nt.links.new(mask_node.outputs['Color'], mask_input)
-            except Exception as e:
-                print(f"[BA] Failed to link mask for {mat.name}: {e}")
+        safe_link(nt, mask_node.outputs.get("Color"), weapon_node.inputs.get("Mask"))
+        safe_link(nt, mask_node.outputs.get("Color"), metallic_node.inputs.get("Mask"))
 
-    # --- output ---
-    try:
-        nt.links.new(shader_node.outputs[0], output_node.inputs['Surface'])
-    except Exception as e:
-        print(f"[BA] Failed to link shader output for {mat.name}: {e}")
+    safe_link(nt, light_color.outputs.get("Color"), metallic_node.inputs.get("Color"))
+    safe_link(nt, metallic_node.outputs.get("Result"), output_node.inputs.get("Surface"))
 
 
 
 def setup_alpha_material(mat, images):
+    setup_prop_alpha_material(mat, images)
+
+
+def setup_car_alpha_material(mat, images):
+    setup_prop_alpha_material(mat, images, use_textures=False)
+
+
+def setup_prop_alpha_material(mat, images, use_textures=True):
     if not mat.use_nodes:
         mat.use_nodes = True
 
-    mat.surface_render_method = 'BLENDED'
+    configure_alpha_material(mat)
 
-
-    old_tex = find_image_node(mat)
+    old_tex = find_image_node(mat) if use_textures else None
     had_texture = old_tex is not None
     old_image = old_tex.image if old_tex else None
 
@@ -154,45 +130,58 @@ def setup_alpha_material(mat, images):
 
     out = ensure_output(mat)
 
-    tex_node = None
+    base_img, mask_img = find_base_and_mask(images) if use_textures else (None, None)
 
+    if base_img is None and had_texture:
+        base_img = old_image
 
-    if had_texture:
+    base_node = None
+    mask_node = None
 
-        base_img, _ = find_base_and_mask(images)
+    if base_img:
+        base_node = new_tex(nt, base_img, non_color=False, loc=(-620, 0))
 
-        if base_img is None:
-            base_img = old_image
+    if mask_img:
+        mask_node = new_tex(nt, mask_img, non_color=True, loc=(-620, -280))
 
-        if base_img:
-            tex_node = new_tex(
-                nt,
-                base_img,
-                non_color=False,
-                loc=(-400, 0)
-            )
+    weapon_node = nt.nodes.new("ShaderNodeGroup")
+    weapon_group = ensure_node_group("ba_weapon_shader")
+    if not weapon_group:
+        print(f"[BA] Node group 'ba_weapon_shader' not found for {mat.name}")
+        return
 
-    # --------------------------------
-    # ba_alpha
-    # --------------------------------
-    alpha_node = nt.nodes.new("ShaderNodeGroup")
-    ng = ensure_node_group("ba_alpha")
-    if not ng:
+    weapon_node.node_tree = weapon_group
+    weapon_node.location = (-280, 0)
+
+    if base_node:
+        safe_link(nt, base_node.outputs.get("Color"), weapon_node.inputs.get("Base_Color"))
+        if mask_node:
+            safe_link(nt, mask_node.outputs.get("Color"), weapon_node.inputs.get("Mask"))
+
+        _, alpha_node = add_lit_alpha_node(
+            nt,
+            weapon_node.outputs.get("Result"),
+            base_node.outputs.get("Color"),
+            base_node.outputs.get("Alpha"),
+            light_loc=(-90, 0),
+            alpha_loc=(90, 0),
+        )
+    else:
+        _, alpha_node = add_lit_alpha_node(
+            nt,
+            weapon_node.outputs.get("Result"),
+            None,
+            None,
+            light_loc=(-90, 0),
+            alpha_loc=(90, 0),
+            alpha_default=0.3733333349227905,
+        )
+        set_input_default(alpha_node, "Fresnel", 1)
+        set_input_default(alpha_node, "fresnelcolor_factor", 0.35)
+        set_input_default(alpha_node, "Spec", 1)
+
+    if not alpha_node.node_tree:
         print(f"[BA] Node group 'ba_alpha' not found for {mat.name}")
         return
 
-    alpha_node.node_tree = ng
-    alpha_node.location = (-100, 0)
-
-
-    if tex_node:
-        if "Color" in tex_node.outputs and len(alpha_node.inputs) > 0:
-            nt.links.new(tex_node.outputs["Color"], alpha_node.inputs[0])
-
-        if "Alpha" in tex_node.outputs and len(alpha_node.inputs) > 1:
-            nt.links.new(tex_node.outputs["Alpha"], alpha_node.inputs[1])
-
-    # --------------------------------
-    # output
-    # --------------------------------
-    nt.links.new(alpha_node.outputs[0], out.inputs["Surface"])
+    link_alpha_to_output(nt, alpha_node, out)

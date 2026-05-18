@@ -5,6 +5,7 @@ from bpy.types import Operator, PropertyGroup
 
 from . import ba_shader_controls
 from . import ba_outline
+from .ba_utils import add_light_color_node, add_lit_alpha_node, clear_nodes, configure_alpha_material, ensure_node_group, ensure_output, link_alpha_to_output, new_tex, refresh_view_layer, safe_link
 
 # -------- utils--------
 def build_import_image_map(images):
@@ -59,53 +60,6 @@ def detect_material_base_type(mat):
 
     return None
 
-def safe_link(nt, out_socket, in_socket):
-    if out_socket and in_socket:
-        nt.links.new(out_socket, in_socket)
-
-def ensure_output(mat):
-    nt = mat.node_tree
-    out = nt.nodes.get("Material Output")
-    if not out:
-        out = nt.nodes.new("ShaderNodeOutputMaterial")
-        out.location = (400, 0)
-    return out
-
-
-def clear_nodes(mat):
-    nt = mat.node_tree
-    nt.nodes.clear()
-
-
-def new_tex(nt, img, non_color=False, loc=(0, 0)):
-    if img is None:
-        return None
-    n = nt.nodes.new("ShaderNodeTexImage")
-    n.image = img
-    if n.image:
-            n.image.alpha_mode = 'CHANNEL_PACKED'
-    if non_color:
-        n.image.colorspace_settings.name = 'Non-Color'
-    n.location = loc
-    return n
-
-
-def ensure_node_group(group_name):
-    if group_name in bpy.data.node_groups:
-        return bpy.data.node_groups[group_name]
-
-    addon_dir = os.path.dirname(__file__)
-    blend_path = os.path.join(addon_dir, "shaders", "ba_node_groups.blend")
-
-    with bpy.data.libraries.load(blend_path, link=False) as (data_from, data_to):
-        if group_name in data_from.node_groups:
-            data_to.node_groups = [group_name]
-        else:
-            print(f"[BA] Node group not found: {group_name}")
-            return None
-
-    return bpy.data.node_groups.get(group_name)
-
 # -------- setup functions --------
 def setup_emission(mat, image, strength=1.0):
     if image is None:
@@ -126,8 +80,8 @@ def setup_emission(mat, image, strength=1.0):
 
     out = ensure_output(mat)
 
-    nt.links.new(tex.outputs['Color'], emission.inputs['Color'])
-    nt.links.new(emission.outputs['Emission'], out.inputs['Surface'])
+    safe_link(nt, tex.outputs.get('Color'), emission.inputs.get('Color'))
+    safe_link(nt, emission.outputs.get('Emission'), out.inputs.get('Surface'))
 
 def setup_eyemouth(mat, images):
 
@@ -146,9 +100,16 @@ def setup_eyemouth(mat, images):
 
     no_shadow_node = nt.nodes.new("ShaderNodeGroup")
     no_shadow_node.node_tree = ensure_node_group("ba_no_shadow")
-    no_shadow_node.location = (-150, 0)
+    no_shadow_node.location = (80, 0)
 
-    safe_link(nt, tex_node.outputs.get('Color'), no_shadow_node.inputs[0])
+    light_color = add_light_color_node(
+        nt,
+        tex_node.outputs.get('Color'),
+        tex_node.outputs.get('Color'),
+        (-180, 0)
+    )
+
+    safe_link(nt, light_color.outputs.get('Color'), no_shadow_node.inputs[0])
 
     out_node = ensure_output(mat)
     safe_link(nt, no_shadow_node.outputs[0], out_node.inputs['Surface'])
@@ -183,7 +144,14 @@ def setup_body(mat, images):
         safe_link(nt, mask.outputs.get('Color'), shader.inputs[1])
         safe_link(nt, mask.outputs.get('Alpha'), shader.inputs[2])
 
-    safe_link(nt, shader.outputs[0], out.inputs['Surface'])
+    light_color = add_light_color_node(
+        nt,
+        shader.outputs.get('Result', shader.outputs[0]),
+        body.outputs.get('Color'),
+        (40, 0)
+    )
+
+    safe_link(nt, light_color.outputs.get('Color'), out.inputs['Surface'])
 
 
 def setup_face(mat, images):
@@ -211,7 +179,14 @@ def setup_face(mat, images):
     if mask:
         safe_link(nt, mask.outputs.get('Color'), shader.inputs[1])
 
-    safe_link(nt, shader.outputs[0], out.inputs['Surface'])
+    light_color = add_light_color_node(
+        nt,
+        shader.outputs.get('Result', shader.outputs[0]),
+        face.outputs.get('Color'),
+        (40, 0)
+    )
+
+    safe_link(nt, light_color.outputs.get('Color'), out.inputs['Surface'])
 
 
 def setup_hair(mat, images):
@@ -245,8 +220,15 @@ def setup_hair(mat, images):
         safe_link(nt, spec.outputs.get('Color'), shader.inputs[2])
         safe_link(nt, spec.outputs.get('Alpha'), shader.inputs[3])
 
-    safe_link(nt, shader.outputs[0], out.inputs['Surface'])
-    
+    light_color = add_light_color_node(
+        nt,
+        shader.outputs.get('Result', shader.outputs[0]),
+        hair.outputs.get('Color'),
+        (40, 0)
+    )
+
+    safe_link(nt, light_color.outputs.get('Color'), out.inputs['Surface'])
+
 def setup_eyebrow(mat, images):
     if not mat.use_nodes:
         mat.use_nodes = True
@@ -266,7 +248,7 @@ def setup_eyebrow(mat, images):
     if tex is None:
         clear_nodes(mat)
         nt = mat.node_tree
-        
+
         out_node = ensure_output(mat)
 
         no_shadow_node = nt.nodes.new("ShaderNodeGroup")
@@ -278,7 +260,7 @@ def setup_eyebrow(mat, images):
             no_shadow_node.outputs.get('Surface', no_shadow_node.outputs[0]),
             out_node.inputs['Surface']
         )
-        
+
         eyebrow_node_group = nt.nodes.new("ShaderNodeGroup")
         eyebrow_node_group.node_tree = ensure_node_group("eyebrow_in_front")
         eyebrow_node_group.location = (0, -200)
@@ -300,9 +282,16 @@ def setup_eyebrow(mat, images):
     # ba_no_shadow
     no_shadow_node = nt.nodes.new("ShaderNodeGroup")
     no_shadow_node.node_tree = ensure_node_group("ba_no_shadow")
-    no_shadow_node.location = (-150, 0)
+    no_shadow_node.location = (80, 0)
 
-    safe_link(nt, tex_node.outputs.get('Color'), no_shadow_node.inputs[0])
+    light_color = add_light_color_node(
+        nt,
+        tex_node.outputs.get('Color'),
+        tex_node.outputs.get('Color'),
+        (-180, 0)
+    )
+
+    safe_link(nt, light_color.outputs.get('Color'), no_shadow_node.inputs[0])
 
     out_node = ensure_output(mat)
     safe_link(nt, no_shadow_node.outputs[0], out_node.inputs['Surface'])
@@ -315,7 +304,7 @@ def setup_eyebrow(mat, images):
 
     safe_link(nt, eyebrow_node_group.outputs.get('Displacement'), out_node.inputs.get('Displacement'))
 
-    mat.displacement_method = 'BOTH' 
+    mat.displacement_method = 'BOTH'
 
 def setup_body_alpha(mat, images):
     clear_nodes(mat)
@@ -324,8 +313,8 @@ def setup_body_alpha(mat, images):
     tex_body = find_image(images, "Body")
     tex_mask = find_image(images, "Body_Mask")
 
-    mat.surface_render_method = 'BLENDED'
-    
+    configure_alpha_material(mat)
+
     if not tex_body:
         print(f"[BA] Body texture missing: {mat.name}")
         return
@@ -333,37 +322,100 @@ def setup_body_alpha(mat, images):
     body = new_tex(nt, tex_body, False, (-800, 100))
     mask = new_tex(nt, tex_mask, True, (-800, -100)) if tex_mask else None
 
-    # ba_body_shader
     body_shader = nt.nodes.new("ShaderNodeGroup")
     body_shader.node_tree = ensure_node_group("ba_body_shader")
     body_shader.location = (-400, 0)
 
-    # ba_alpha
-    alpha_shader = nt.nodes.new("ShaderNodeGroup")
-    alpha_shader.node_tree = ensure_node_group("ba_alpha")
-    alpha_shader.location = (-100, 0)
-
     out = ensure_output(mat)
 
-    # ---- links ----
     safe_link(nt, body.outputs.get('Color'), body_shader.inputs[0])
 
     if mask:
         safe_link(nt, mask.outputs.get('Color'), body_shader.inputs[1])
         safe_link(nt, mask.outputs.get('Alpha'), body_shader.inputs[2])
 
-    # 
-    safe_link(
+    _, alpha_shader = add_lit_alpha_node(
         nt,
-        body_shader.outputs[0],
-        alpha_shader.inputs[0]  # ba_alpha 的 Color
+        body_shader.outputs.get('Result', body_shader.outputs[0]),
+        body.outputs.get('Color'),
+        body.outputs.get('Alpha'),
+        light_loc=(-180, 0),
+        alpha_loc=(80, 0),
     )
 
-    safe_link(
+    link_alpha_to_output(nt, alpha_shader, out)
+
+
+def setup_hair_alpha(mat, images):
+    clear_nodes(mat)
+    nt = mat.node_tree
+
+    tex_hair = find_image(images, "Hair")
+    tex_mask = find_image(images, "Hair_Mask")
+    tex_spec = find_image(images, "Hair_Spec")
+
+    configure_alpha_material(mat)
+
+    if not tex_hair:
+        print(f"[BA] Hair texture missing: {mat.name}")
+        return
+
+    hair = new_tex(nt, tex_hair, False, (-800, 200))
+    mask = new_tex(nt, tex_mask, True, (-800, 0)) if tex_mask else None
+    spec = new_tex(nt, tex_spec, True, (-800, -200)) if tex_spec else None
+
+    hair_shader = nt.nodes.new("ShaderNodeGroup")
+    hair_shader.node_tree = ensure_node_group("ba_hair_shader")
+    hair_shader.location = (-400, 0)
+
+    out = ensure_output(mat)
+
+    safe_link(nt, hair.outputs.get('Color'), hair_shader.inputs[0])
+
+    if mask:
+        safe_link(nt, mask.outputs.get('Color'), hair_shader.inputs[1])
+
+    if spec:
+        safe_link(nt, spec.outputs.get('Color'), hair_shader.inputs[2])
+        safe_link(nt, spec.outputs.get('Alpha'), hair_shader.inputs[3])
+
+    _, alpha_shader = add_lit_alpha_node(
         nt,
-        alpha_shader.outputs[0],
-        out.inputs['Surface']
+        hair_shader.outputs.get('Result', hair_shader.outputs[0]),
+        hair.outputs.get('Color'),
+        hair.outputs.get('Alpha'),
+        light_loc=(-180, 0),
+        alpha_loc=(80, 0),
     )
+
+    link_alpha_to_output(nt, alpha_shader, out)
+
+
+def setup_frill_alpha(mat, images):
+    setup_body_alpha(mat, images)
+
+
+CHARACTER_MATERIAL_HANDLERS = (
+    ("_Body_Arms", setup_body),
+    ("_Body", setup_body),
+    ("_Hair_Alpha", setup_hair_alpha),
+    ("_Frill", setup_frill_alpha),
+    ("_Alpha", setup_body_alpha),
+    ("_Face", setup_face),
+    ("_Hair", setup_hair),
+    ("_EyeMouth", setup_eyemouth),
+    ("_Eyebrow2", setup_eyebrow),
+    ("_Eyebrow", setup_eyebrow),
+)
+
+
+def setup_character_material(mat, images):
+    for suffix, handler in CHARACTER_MATERIAL_HANDLERS:
+        if mat.name.endswith(suffix):
+            handler(mat, images)
+            return True
+
+    return False
 
 
 # -------- Operator --------
@@ -395,35 +447,12 @@ class BA_OT_setup_materials(Operator):
                     mats.add(slot.material)
 
         for mat in mats:
-            name = mat.name
-            if name.endswith("_Body"):
-                setup_body(mat, images)
+            setup_character_material(mat, images)
 
-            elif name.endswith("_Alpha"):
-                setup_body_alpha(mat, images)
-
-            elif name.endswith("_Face"):
-                setup_face(mat, images)
-
-            elif name.endswith("_Hair"):
-                setup_hair(mat, images)
-
-            elif name.endswith("_EyeMouth"):
-                setup_eyemouth(mat, images)
-
-            elif name.endswith("_Eyebrow"):
-                setup_eyebrow(mat, images)
-                
-            elif name.endswith("_Eyebrow2"):
-                setup_eyebrow(mat, images)
-                
-            elif name.endswith("_Body_Arms"):
-                setup_body(mat, images)
-               
-                
+        ba_shader_controls.remove_shared_node_group_drivers()
         ba_shader_controls.ensure_hair_spec_control(context)
         ba_shader_controls.ensure_face_light_dot_control(context)
-        
+
         empty = bpy.data.objects.get("face_light_dot")
         ba_shader_controls.add_face_rotation_drivers(empty, context)
 
@@ -431,5 +460,6 @@ class BA_OT_setup_materials(Operator):
         ba_shader_controls.add_hair_rotation_drivers(empty, context)
 
         ba_outline.add_ba_outline(context)
+        refresh_view_layer(context)
 
         return {'FINISHED'}

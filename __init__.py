@@ -2,7 +2,7 @@ bl_info = {
     "name": "BA Auto Material Setup",
     "author": "sensei_killer&ChatGPT",
     "version": (0, 1, 1),
-    "blender": (4, 5, 0),
+    "blender": (4, 2, 0),
     "location": "View3D > Sidebar > BA",
     "description": "Auto setup Body/Face/Hair materials with BA shaders",
     "category": "Material",
@@ -12,71 +12,15 @@ import bpy
 import os
 from bpy.props import StringProperty, CollectionProperty
 from bpy.types import Operator, Panel, PropertyGroup
-from . import ba_shader_controls
-from . import ba_outline
 from . import ba_props
 from . import ba_props_outline
 from . import ba_halo
 from . import ba_mouth
 from . import ba_ch_materials
+from . import ba_rigify
+from .ba_utils import refresh_view_layer
 
 # ---------------- operator ----------------
-
-class BA_OT_setup_materials(Operator):
-    bl_idname = "ba.setup_materials_ch"
-    bl_label = "Setup Character Materials"
-
-    files: CollectionProperty(type=PropertyGroup)
-    directory: StringProperty(subtype='DIR_PATH')
-
-    def invoke(self, context, event):
-        context.window_manager.fileselect_add(self)
-        return {'RUNNING_MODAL'}
-
-    def execute(self, context):
-        images = []
-        for f in self.files:
-            path = os.path.join(self.directory, f.name)
-            img = bpy.data.images.load(path, check_existing=True)
-            images.append(img)
-
-        mats = set()
-        for obj in context.selected_objects:
-            if obj.type != 'MESH':
-                continue
-            for slot in obj.material_slots:
-                if slot.material and slot.material.use_nodes:
-                    mats.add(slot.material)
-
-        for mat in mats:
-            name = mat.name
-            if name.endswith("_Body"):
-                setup_body(mat, images)
-
-            elif name.endswith("_Face"):
-                setup_face(mat, images)
-
-            elif name.endswith("_Hair"):
-                setup_hair(mat, images)
-
-            elif name.endswith("_EyeMouth"):
-                setup_emission_from_images(mat, images, "EyeMouth", strength=1.0)
-
-            elif name.endswith("_Eyebrow"):
-                setup_emission_from_images(mat, images, "Eyebrow", strength=1.0)
-
-        ba_shader_controls.ensure_hair_spec_control(context)
-        ba_shader_controls.ensure_face_light_dot_control(context)
-        
-        empty = bpy.data.objects.get("face_light_dot")
-        ba_shader_controls.add_face_rotation_drivers(empty, context)
-
-        empty = bpy.data.objects.get("hair_spec_normal")
-        ba_shader_controls.add_hair_rotation_drivers(empty, context)
-
-        ba_outline.add_ba_outline(context)
-
-        return {'FINISHED'}
 
 
 class BA_OT_setup_prop(Operator):
@@ -111,13 +55,16 @@ class BA_OT_setup_prop(Operator):
                     mats.add(slot.material)
                     
         for mat in mats:
-            if ba_props.is_alpha_material(mat):
+            if ba_props.is_car_alpha_material(mat):
+                ba_props.setup_car_alpha_material(mat, images)
+            elif ba_props.is_alpha_material(mat):
                 ba_props.setup_alpha_material(mat, images)
             else:
                 ba_props.setup_prop_material(mat, images)
 
             
         ba_props_outline.add_ba_props_outline(context)
+        refresh_view_layer(context)
 
         self.report({'INFO'}, "Setup Prop")
         return {'FINISHED'}
@@ -142,6 +89,28 @@ class BA_OT_setup_mouth(Operator):
         return {'FINISHED'}
 
 
+class BA_OT_set_color_management(Operator):
+    bl_idname = "ba.set_color_management"
+    bl_label = "Set color management"
+
+    def execute(self, context):
+        scene = context.scene
+        scene.display_settings.display_device = 'sRGB'
+        scene.view_settings.view_transform = 'Standard'
+        self.report({'INFO'}, "Color Management set to sRGB / Standard")
+        return {'FINISHED'}
+
+
+class BA_OT_convert_to_rigify(Operator):
+    bl_idname = "ba.convert_to_rigify"
+    bl_label = "Convert to Rigify"
+
+    def execute(self, context):
+        ba_rigify.run_convert_to_rigify()
+        self.report({'INFO'}, "Converted selection to Rigify")
+        return {'FINISHED'}
+
+
 # ---------------- panel ----------------
 
 class BA_PT_panel(Panel):
@@ -161,6 +130,8 @@ class BA_PT_panel(Panel):
         layout.separator()
 
         layout.operator("ba.setup_mouth", icon='MATERIAL')
+        layout.operator("ba.convert_to_rigify", icon='ARMATURE_DATA')
+        layout.operator("ba.set_color_management", icon='COLOR')
 
 
 # ---------------- register ----------------
@@ -170,6 +141,8 @@ classes = (
     BA_OT_setup_prop,
     BA_OT_setup_halo,
     BA_OT_setup_mouth,
+    BA_OT_convert_to_rigify,
+    BA_OT_set_color_management,
     BA_PT_panel,
     ba_halo.BA_OT_halo_pick_image,
 )

@@ -1,8 +1,12 @@
 import bpy
-import os
 
+from .ba_utils import (
+    ensure_socket_is_attribute,
+    import_material,
+    import_node_group,
+    remove_existing_nodes_modifier,
+)
 
-NODE_GROUP_BLEND = "ba_node_groups.blend"
 GEO_NODE_NAME = "ba_outline"
 
 OUTLINE_MATERIALS = {
@@ -10,66 +14,6 @@ OUTLINE_MATERIALS = {
     "FaceOutline": "face_outline",
     "BodyOutline": "body_outline",
 }
-
-
-def _addon_dir():
-    return os.path.dirname(__file__)
-
-
-def _nodegroup_blend_path():
-    path = os.path.join(
-        os.path.dirname(__file__),
-        "shaders",
-        "ba_node_groups.blend"
-    )
-
-    if not os.path.exists(path):
-        print("[BA Outline] ERROR: ba_node_groups.blend not found:")
-        print("   ", path)
-
-    return path
-
-
-
-# ------------------------------------------------------------
-# Import helpers
-# ------------------------------------------------------------
-def remove_existing_outline_modifier(obj):
-    for mod in list(obj.modifiers):
-        if (
-            mod.type == 'NODES'
-            and mod.node_group
-            and mod.node_group.name == GEO_NODE_NAME
-        ):
-            obj.modifiers.remove(mod)
-
-
-
-def import_geometry_node_group(group_name):
-    if group_name in bpy.data.node_groups:
-        return bpy.data.node_groups[group_name]
-
-    blend_path = _nodegroup_blend_path()
-    with bpy.data.libraries.load(blend_path, link=False) as (data_from, data_to):
-        if group_name not in data_from.node_groups:
-            return None
-        data_to.node_groups = [group_name]
-
-    return bpy.data.node_groups.get(group_name)
-
-
-def import_material(mat_name):
-    if mat_name in bpy.data.materials:
-        return bpy.data.materials[mat_name]
-
-    blend_path = _nodegroup_blend_path()
-    with bpy.data.libraries.load(blend_path, link=False) as (data_from, data_to):
-        if mat_name not in data_from.materials:
-            return None
-        data_to.materials = [mat_name]
-
-    return bpy.data.materials.get(mat_name)
-
 
 # ------------------------------------------------------------
 # Vertex group creation
@@ -104,33 +48,24 @@ def build_outline_vertex_group(obj):
     return vg
 
 
+def refresh_modifier_viewport(obj, mod):
+    mod.show_viewport = False
+    mod.show_viewport = True
+    obj.update_tag()
+
+
 # ------------------------------------------------------------
 # Geometry Nodes setup
 # ------------------------------------------------------------
-def ensure_socket_is_attribute(obj, modifier, socket_identifier):
-
-    view_layer = bpy.context.view_layer
-    view_layer.objects.active = obj
-
-    if obj.mode != 'OBJECT':
-        bpy.ops.object.mode_set(mode='OBJECT')
-
-    bpy.ops.object.geometry_nodes_input_attribute_toggle(
-        modifier_name=modifier.name,
-        input_name=socket_identifier
-    )
-
-
-
 def setup_outline_geometry_nodes(obj):
-    geo_group = import_geometry_node_group(GEO_NODE_NAME)
+    geo_group = import_node_group(GEO_NODE_NAME, "[BA Outline]", report_missing=False)
     if not geo_group:
         print("[BA Outline] Node group not found")
         return False
 
     outline_mats = {}
     for key, mat_name in OUTLINE_MATERIALS.items():
-        mat = import_material(mat_name)
+        mat = import_material(mat_name, "[BA Outline]")
         if not mat:
             return False
         outline_mats[key] = mat
@@ -152,7 +87,7 @@ def setup_outline_geometry_nodes(obj):
     vg = build_outline_vertex_group(obj)
     
     # --- Remove existing outline GN ---
-    remove_existing_outline_modifier(obj)
+    remove_existing_nodes_modifier(obj, GEO_NODE_NAME)
 
 
     # --- GN Modifier ---
@@ -186,6 +121,7 @@ def setup_outline_geometry_nodes(obj):
 
 
 
+    refresh_modifier_viewport(obj, mod)
     return True
 
 

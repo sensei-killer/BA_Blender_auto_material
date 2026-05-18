@@ -4,21 +4,7 @@ import os
 from bpy_extras.io_utils import ImportHelper
 from bpy.props import StringProperty
 
-def ensure_node_group(group_name):
-    if group_name in bpy.data.node_groups:
-        return bpy.data.node_groups[group_name]
-
-    addon_dir = os.path.dirname(__file__)
-    blend_path = os.path.join(addon_dir, "shaders", "ba_node_groups.blend")
-
-    with bpy.data.libraries.load(blend_path, link=False) as (data_from, data_to):
-        if group_name in data_from.node_groups:
-            data_to.node_groups = [group_name]
-        else:
-            print(f"[BA] Node group not found: {group_name}")
-            return None
-
-    return bpy.data.node_groups.get(group_name)
+from .ba_utils import ensure_node_group, safe_link
 
 class BA_OT_halo_pick_image(bpy.types.Operator, ImportHelper):
     """Pick image and apply emission material"""
@@ -52,7 +38,6 @@ class BA_OT_halo_pick_image(bpy.types.Operator, ImportHelper):
         mat.use_nodes = True
 
         nodes = mat.node_tree.nodes
-        links = mat.node_tree.links
         nodes.clear()
 
         tex = nodes.new("ShaderNodeTexImage")
@@ -72,8 +57,8 @@ class BA_OT_halo_pick_image(bpy.types.Operator, ImportHelper):
         output.location = (200, 0)
 
 
-        links.new(tex.outputs["Color"], halo.inputs[0])
-        links.new(halo.outputs[0], output.inputs["Surface"])
+        safe_link(mat.node_tree, tex.outputs.get("Color"), halo.inputs[0])
+        safe_link(mat.node_tree, halo.outputs[0], output.inputs.get("Surface"))
 
 
         if obj.data.materials:
