@@ -449,6 +449,7 @@ class BA_OT_setup_materials(Operator):
         for mat in mats:
             setup_character_material(mat, images)
 
+        ba_shader_controls.remove_shared_node_group_drivers()
         ba_shader_controls.ensure_hair_spec_control(context)
         ba_shader_controls.ensure_face_light_dot_control(context)
 

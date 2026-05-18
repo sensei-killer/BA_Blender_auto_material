@@ -132,6 +132,20 @@ def test_rotation_driver_helpers_guard_against_missing_empty():
     assert "if empty is None:" in source
 
 
+def test_shader_control_drivers_are_cleaned_from_shared_node_groups():
+    shader_source = (ROOT / "ba_shader_controls.py").read_text(encoding="utf-8")
+    material_source = (ROOT / "ba_ch_materials.py").read_text(encoding="utf-8")
+
+    assert "SHARED_SHADER_DRIVER_NODE_GROUPS" in shader_source
+    assert "def remove_shared_node_group_drivers" in shader_source
+    assert "node_group.animation_data.drivers" in shader_source
+    assert "node_group.driver_remove(fcurve.data_path, fcurve.array_index)" in shader_source
+
+    driver_setup_pos = material_source.index("ba_shader_controls.add_face_rotation_drivers")
+    cleanup_pos = material_source.index("ba_shader_controls.remove_shared_node_group_drivers()")
+    assert cleanup_pos < driver_setup_pos
+
+
 def test_rigify_migration_retargets_shader_control_empties():
     source = (ROOT / "migrate_body_to_rig_auto.py").read_text(encoding="utf-8")
 
@@ -295,6 +309,7 @@ if __name__ == "__main__":
     test_prop_outline_node_group_name_is_spelled_correctly()
     test_shader_controls_expose_shared_head_control_helper()
     test_rotation_driver_helpers_guard_against_missing_empty()
+    test_shader_control_drivers_are_cleaned_from_shared_node_groups()
     test_rigify_migration_retargets_shader_control_empties()
     test_rigify_migration_scores_body_mesh_without_selection_order()
     test_rigify_migration_skips_unbound_selected_meshes()

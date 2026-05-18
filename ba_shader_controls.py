@@ -3,6 +3,11 @@ import bpy
 
 CONTROL_EMPTY_NAME = "hair_spec_normal"
 CONTROL_EMPTY_NAME_FACE = "face_light_dot"
+SHARED_SHADER_DRIVER_NODE_GROUPS = (
+    "ba_face_shader",
+    "ba_hair_shader",
+    "BA_SPEC",
+)
 
 RIGIFY_HEAD_BONE_CANDIDATES = (
     "head",
@@ -106,10 +111,32 @@ def retarget_shader_controls_to_rig(context, rig):
     hair_empty = ensure_head_control(context, CONTROL_EMPTY_NAME, rig=rig)
     face_empty = ensure_head_control(context, CONTROL_EMPTY_NAME_FACE, rig=rig)
 
+    remove_shared_node_group_drivers()
     add_hair_rotation_drivers(hair_empty, context)
     add_face_rotation_drivers(face_empty, context)
 
     return hair_empty, face_empty
+
+
+def remove_shared_node_group_drivers():
+    removed = 0
+
+    for node_group_name in SHARED_SHADER_DRIVER_NODE_GROUPS:
+        node_group = bpy.data.node_groups.get(node_group_name)
+        if node_group is None or node_group.animation_data is None:
+            continue
+
+        for fcurve in list(node_group.animation_data.drivers):
+            try:
+                node_group.driver_remove(fcurve.data_path, fcurve.array_index)
+                removed += 1
+            except (TypeError, ValueError, RuntimeError) as exc:
+                print(
+                    f"[Warning] Could not remove driver from node group "
+                    f"{node_group.name}: {fcurve.data_path}[{fcurve.array_index}] ({exc})"
+                )
+
+    return removed
 
 
 def _find_rotation_shader_node(mat, node_group_name):
