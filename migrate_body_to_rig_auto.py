@@ -22,6 +22,15 @@ def load_ba_shader_controls_module():
 
 ba_shader_controls, BA_SHADER_CONTROLS_LOAD_ERROR = load_ba_shader_controls_module()
 
+IGNORED_RIG_NAME_TOKENS = ("mouthre",)
+
+
+def is_ignored_rig(obj):
+    if obj is None or obj.type != "ARMATURE":
+        return False
+    lowered = obj.name.lower()
+    return any(token in lowered for token in IGNORED_RIG_NAME_TOKENS)
+
 # Migrate the selected body mesh from the selected original armature to the
 # selected generated Rigify armature.
 #
@@ -128,11 +137,14 @@ report = {
 
 
 def has_source_armature_modifier(mesh, source):
-    return any(mod.type == "ARMATURE" and mod.object == source for mod in mesh.modifiers)
+    return any(mod.type == "ARMATURE" and mod.object == source and not is_ignored_rig(mod.object) for mod in mesh.modifiers)
 
 
 def has_any_armature_modifier_from(mesh, armatures):
-    return any(mod.type == "ARMATURE" and mod.object in armatures for mod in mesh.modifiers)
+    return any(
+        mod.type == "ARMATURE" and mod.object in armatures and not is_ignored_rig(mod.object)
+        for mod in mesh.modifiers
+    )
 
 
 def body_group_names():
@@ -233,7 +245,7 @@ def resolve_scene_objects_from_context():
 def resolve_scene_objects_from_selection():
     selected = list(bpy.context.selected_objects)
     meshes = [obj for obj in selected if obj.type == "MESH"]
-    armatures = [obj for obj in selected if obj.type == "ARMATURE"]
+    armatures = [obj for obj in selected if obj.type == "ARMATURE" and not is_ignored_rig(obj)]
 
     if len(meshes) < 1 or len(armatures) != 2:
         raise RuntimeError(
@@ -249,6 +261,8 @@ def resolve_scene_objects_from_selection():
     for mesh in meshes:
         for modifier in mesh.modifiers:
             if modifier.type == "ARMATURE" and modifier.object in armatures:
+                if is_ignored_rig(modifier.object):
+                    continue
                 source = modifier.object
                 break
         if source is not None:
@@ -257,6 +271,8 @@ def resolve_scene_objects_from_selection():
     if source is None:
         for mesh in meshes:
             if mesh.parent in armatures:
+                if is_ignored_rig(mesh.parent):
+                    continue
                 source = mesh.parent
                 body_mesh = mesh
                 break

@@ -14,6 +14,14 @@ from pathlib import Path
 CREATE_SCRIPT = "create_and_align_human_metarig.py"
 MIGRATE_SCRIPT = "migrate_body_to_rig_auto.py"
 GENERATED_RIG_SUFFIX = "_rigify_auto"
+IGNORED_RIG_NAME_TOKENS = ("mouthre",)
+
+
+def is_ignored_rig(obj):
+    if obj is None or obj.type != "ARMATURE":
+        return False
+    lowered = obj.name.lower()
+    return any(token in lowered for token in IGNORED_RIG_NAME_TOKENS)
 
 
 def script_dir():
@@ -32,7 +40,7 @@ def load_script(name):
 
 def require_selection():
     selected = list(bpy.context.selected_objects)
-    armatures = [obj for obj in selected if obj.type == "ARMATURE"]
+    armatures = [obj for obj in selected if obj.type == "ARMATURE" and not is_ignored_rig(obj)]
     meshes = [obj for obj in selected if obj.type == "MESH"]
     if len(armatures) != 1 or len(meshes) < 1:
         raise RuntimeError(

@@ -17,15 +17,24 @@ RIGIFY_HEAD_BONE_CANDIDATES = (
     "Bip001 Head",
 )
 
+IGNORED_RIG_NAME_TOKENS = ("mouthre",)
+
+
+def is_ignored_rig(obj):
+    if obj is None or obj.type != "ARMATURE":
+        return False
+    lowered = obj.name.lower()
+    return any(token in lowered for token in IGNORED_RIG_NAME_TOKENS)
+
 
 def find_rig_from_objects(objs):
     for obj in objs:
-        if obj.type == 'ARMATURE':
+        if obj.type == 'ARMATURE' and not is_ignored_rig(obj):
             return obj
         for mod in obj.modifiers:
-            if mod.type == 'ARMATURE' and mod.object:
+            if mod.type == 'ARMATURE' and mod.object and not is_ignored_rig(mod.object):
                 return mod.object
-        if obj.parent and obj.parent.type == 'ARMATURE':
+        if obj.parent and obj.parent.type == 'ARMATURE' and not is_ignored_rig(obj.parent):
             return obj.parent
     return None
 
