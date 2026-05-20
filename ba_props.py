@@ -3,7 +3,7 @@ import os
 from bpy.types import Operator, PropertyGroup
 from bpy.props import CollectionProperty, StringProperty
 
-from .ba_utils import add_alpha_node, add_light_color_node, add_lit_alpha_node, clear_nodes, configure_alpha_material, ensure_node_group, ensure_output, link_alpha_to_output, new_tex, safe_link, set_input_default
+from .ba_utils import add_alpha_node, add_light_color_node, add_lit_alpha_node, clear_nodes, configure_alpha_material, ensure_node_group, ensure_output, link_alpha_to_output, new_base_color_tex, new_tex, safe_link, set_input_default
 
 # ---------------- utils ----------------
 
@@ -58,7 +58,7 @@ def setup_prop_material(mat, images):
     nt = mat.node_tree
 
     # ---  Base  ---
-    base_node = new_tex(nt, base_img, non_color=False, loc=(-600, 100))
+    base_node = new_base_color_tex(nt, base_img, loc=(-600, 100))
 
     # --- Mask  ---
     mask_node = None
@@ -139,7 +139,7 @@ def setup_prop_alpha_material(mat, images, use_textures=True):
     mask_node = None
 
     if base_img:
-        base_node = new_tex(nt, base_img, non_color=False, loc=(-620, 0))
+        base_node = new_base_color_tex(nt, base_img, loc=(-620, 0))
 
     if mask_img:
         mask_node = new_tex(nt, mask_img, non_color=True, loc=(-620, -280))

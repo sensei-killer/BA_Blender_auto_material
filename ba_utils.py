@@ -77,12 +77,14 @@ def refresh_view_layer(context):
     context.view_layer.update()
 
 
-def new_tex(nt, img, non_color=False, loc=(0, 0)):
+def new_tex(nt, img, non_color=False, loc=(0, 0), interpolation=None):
     if img is None:
         return None
 
     node = nt.nodes.new("ShaderNodeTexImage")
     node.image = img
+    if interpolation is not None:
+        node.interpolation = interpolation
 
     if node.image:
         node.image.alpha_mode = 'CHANNEL_PACKED'
@@ -91,6 +93,10 @@ def new_tex(nt, img, non_color=False, loc=(0, 0)):
 
     node.location = loc
     return node
+
+
+def new_base_color_tex(nt, img, loc=(0, 0)):
+    return new_tex(nt, img, non_color=False, loc=loc, interpolation='Closest')
 
 
 def safe_link(nt, out_socket, in_socket):
