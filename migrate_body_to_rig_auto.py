@@ -52,8 +52,6 @@ REMOVE_OLD_ARMATURE_MODIFIERS = False
 PARENT_BODY_TO_TARGET_ARMATURE = True
 NORMALIZE_AFTER_MIGRATION = False
 CREATE_BACKUP_VERTEX_GROUPS = False
-BODY_MESH_SCORE_TIE_MARGIN = 0
-
 BODY_BONE_TO_DEF = {
     "Bip001 Pelvis": "DEF-spine",
     "Bip001 Spine": "DEF-spine.002",
@@ -160,27 +158,12 @@ def body_mesh_score(mesh):
     return score
 
 
-def choose_body_mesh(meshes):
-    body_candidates = sorted(
-        ((body_mesh_score(mesh), mesh.name, mesh) for mesh in meshes),
-        key=lambda item: (-item[0], item[1]),
-    )
-    best_score, _, body_mesh = body_candidates[0]
-    if best_score <= 0:
-        return None
-
-    tied = [
-        mesh.name
-        for score, _, mesh in body_candidates[1:]
-        if best_score - score <= BODY_MESH_SCORE_TIE_MARGIN and score > 0
+def find_body_meshes(meshes):
+    return [
+        mesh
+        for mesh in meshes
+        if body_mesh_score(mesh) > 0
     ]
-    if tied:
-        raise RuntimeError(
-            "Could not choose one body mesh confidently from selected meshes. "
-            f"Best candidate {body_mesh.name} scored {best_score}; close candidates: {tied}. "
-            "Select only one body mesh plus optional bound extras/unbound props."
-        )
-    return body_mesh
 
 
 def classify_scene_objects(source, target, meshes):
@@ -192,24 +175,25 @@ def classify_scene_objects(source, target, meshes):
         for mesh in meshes
         if has_source_armature_modifier(mesh, source) or mesh.parent == source
     ]
-    body_mesh = choose_body_mesh(bound_meshes) or choose_body_mesh(meshes)
-    if body_mesh is None:
+    body_meshes = find_body_meshes(bound_meshes) or find_body_meshes(meshes)
+    if not body_meshes:
         return None
+    body_mesh_set = set(body_meshes)
 
     modifier_extra_meshes = [
         mesh
         for mesh in meshes
-        if mesh != body_mesh and has_source_armature_modifier(mesh, source)
+        if mesh not in body_mesh_set and has_source_armature_modifier(mesh, source)
     ]
     parented_extra_meshes = [
         mesh
         for mesh in meshes
-        if mesh != body_mesh and mesh not in modifier_extra_meshes and mesh.parent == source
+        if mesh not in body_mesh_set and mesh not in modifier_extra_meshes and mesh.parent == source
     ]
     unbound_meshes = [
         mesh
         for mesh in meshes
-        if mesh != body_mesh
+        if mesh not in body_mesh_set
         and mesh not in modifier_extra_meshes
         and mesh not in parented_extra_meshes
         and not has_any_armature_modifier_from(mesh, [source, target])
@@ -217,7 +201,7 @@ def classify_scene_objects(source, target, meshes):
     for mesh in unbound_meshes:
         report["skipped_unbound_meshes"].append(mesh.name)
 
-    return source, target, body_mesh, modifier_extra_meshes, parented_extra_meshes, unbound_meshes
+    return source, target, body_meshes, modifier_extra_meshes, parented_extra_meshes, unbound_meshes
 
 
 def resolve_scene_objects_from_context():
@@ -232,9 +216,10 @@ def resolve_scene_objects_from_context():
     if result is None:
         return None
 
-    source, target, body_mesh, modifier_extra_meshes, parented_extra_meshes, unbound_meshes = result
+    source, target, body_meshes, modifier_extra_meshes, parented_extra_meshes, unbound_meshes = result
     report["warnings"].append(
-        f"Using explicit context: source={source.name}, target={target.name}, body_mesh={body_mesh.name}, "
+        f"Using explicit context: source={source.name}, target={target.name}, "
+        f"body_meshes={[mesh.name for mesh in body_meshes]}, "
         f"modifier_extra_meshes={[mesh.name for mesh in modifier_extra_meshes]}, "
         f"parented_extra_meshes={[mesh.name for mesh in parented_extra_meshes]}, "
         f"unbound_meshes={[mesh.name for mesh in unbound_meshes]}"
@@ -256,8 +241,6 @@ def resolve_scene_objects_from_selection():
 
     source = None
     target = None
-    body_mesh = None
-
     for mesh in meshes:
         for modifier in mesh.modifiers:
             if modifier.type == "ARMATURE" and modifier.object in armatures:
@@ -274,7 +257,6 @@ def resolve_scene_objects_from_selection():
                 if is_ignored_rig(mesh.parent):
                     continue
                 source = mesh.parent
-                body_mesh = mesh
                 break
 
     for armature in armatures:
@@ -297,15 +279,16 @@ def resolve_scene_objects_from_selection():
             "and optional bound extras/unbound props."
         )
 
-    source, target, body_mesh, modifier_extra_meshes, parented_extra_meshes, unbound_meshes = result
+    source, target, body_meshes, modifier_extra_meshes, parented_extra_meshes, unbound_meshes = result
 
     report["warnings"].append(
-        f"Using selection: source={source.name}, target={target.name}, body_mesh={body_mesh.name}, "
+        f"Using selection: source={source.name}, target={target.name}, "
+        f"body_meshes={[mesh.name for mesh in body_meshes]}, "
         f"modifier_extra_meshes={[mesh.name for mesh in modifier_extra_meshes]}, "
         f"parented_extra_meshes={[mesh.name for mesh in parented_extra_meshes]}, "
         f"unbound_meshes={[mesh.name for mesh in unbound_meshes]}"
     )
-    return source, target, body_mesh, modifier_extra_meshes, parented_extra_meshes, unbound_meshes
+    return source, target, body_meshes, modifier_extra_meshes, parented_extra_meshes, unbound_meshes
 
 
 def resolve_scene_objects():
@@ -688,8 +671,9 @@ def print_report():
 
 
 def main():
-    source, target, mesh, modifier_extra_meshes, parented_extra_meshes, unbound_meshes = resolve_scene_objects()
+    source, target, body_meshes, modifier_extra_meshes, parented_extra_meshes, unbound_meshes = resolve_scene_objects()
     extra_meshes = modifier_extra_meshes + parented_extra_meshes
+    processed_meshes = body_meshes + extra_meshes
 
     old_to_new_body = build_body_mapping()
     valid_target_bones = {bone.name for bone in target.data.bones}
@@ -703,13 +687,14 @@ def main():
 
     copy_extra_bones_to_target(source, target, old_to_new_body)
     valid_target_bones = {bone.name for bone in target.data.bones}
-    migrate_vertex_groups(mesh, old_to_new_body, valid_target_bones)
-    normalize_deform_weights(mesh)
-    retarget_mesh_to_target(mesh, source, target)
+    for body_mesh in body_meshes:
+        migrate_vertex_groups(body_mesh, old_to_new_body, valid_target_bones)
+        normalize_deform_weights(body_mesh)
+        retarget_mesh_to_target(body_mesh, source, target)
     for extra_mesh in modifier_extra_meshes:
         retarget_mesh_to_target(extra_mesh, source, target)
-    retarget_shader_control_empties(bpy.context, target, [mesh] + extra_meshes)
-    reparent_source_children(source, target, [mesh] + extra_meshes, old_to_new_body)
+    retarget_shader_control_empties(bpy.context, target, processed_meshes)
+    reparent_source_children(source, target, processed_meshes, old_to_new_body)
 
     print_report()
     return report
