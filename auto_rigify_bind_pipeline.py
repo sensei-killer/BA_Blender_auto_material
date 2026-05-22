@@ -27,15 +27,22 @@ def is_ignored_rig(obj):
 def script_dir():
     if "__file__" in globals():
         return Path(__file__).resolve().parent
-    return Path(r"E:\project\code\ba\ba_shader")
+    raise RuntimeError("Could not resolve BA addon script directory")
 
 
 def load_script(name):
+    path = script_dir() / name
+    if path.exists():
+        if bpy.data.texts.get(name) is not None:
+            print(f"[BA] Ignoring Blender Text script '{name}'; using addon file: {path}")
+        return path.read_text(encoding="utf-8")
+
     text = bpy.data.texts.get(name)
     if text is not None:
+        print(f"[BA] Addon file missing for '{name}', using Blender Text fallback")
         return text.as_string()
-    path = script_dir() / name
-    return path.read_text(encoding="utf-8")
+
+    raise FileNotFoundError(path)
 
 
 def require_selection():
