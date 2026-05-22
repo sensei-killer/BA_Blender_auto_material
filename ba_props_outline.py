@@ -4,6 +4,7 @@ from .ba_utils import (
     ensure_socket_is_attribute,
     import_material,
     import_node_group,
+    material_name_key,
     remove_existing_nodes_modifier,
 )
 
@@ -13,7 +14,7 @@ OUTLINE_MATERIAL_NAME = "weapon_outline"
 
 def find_alpha_material(obj):
     for mat in obj.data.materials:
-        if mat and mat.name.lower().endswith("_alpha"):
+        if mat and material_name_key(mat).lower().endswith("_alpha"):
             return mat
     return None
 

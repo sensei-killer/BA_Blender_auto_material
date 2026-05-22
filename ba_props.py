@@ -3,16 +3,16 @@ import os
 from bpy.types import Operator, PropertyGroup
 from bpy.props import CollectionProperty, StringProperty
 
-from .ba_utils import add_alpha_node, add_light_color_node, add_lit_alpha_node, clear_nodes, configure_alpha_material, ensure_node_group, ensure_output, link_alpha_to_output, new_base_color_tex, new_tex, safe_link, set_input_default
+from .ba_utils import add_alpha_node, add_light_color_node, add_lit_alpha_node, clear_nodes, configure_alpha_material, ensure_node_group, ensure_output, link_alpha_to_output, material_name_key, new_base_color_tex, new_tex, safe_link, set_input_default
 
 # ---------------- utils ----------------
 
 def is_alpha_material(mat):
-    return mat.name.lower().endswith("_alpha")
+    return material_name_key(mat).lower().endswith("_alpha")
 
 
 def is_car_alpha_material(mat):
-    return mat.name.lower().endswith("_car_alpha")
+    return material_name_key(mat).lower().endswith("_car_alpha")
 
 def find_image_node(mat):
     if not mat.use_nodes:

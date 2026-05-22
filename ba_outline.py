@@ -4,6 +4,7 @@ from .ba_utils import (
     ensure_socket_is_attribute,
     import_material,
     import_node_group,
+    material_name_key,
     remove_existing_nodes_modifier,
 )
 
@@ -36,7 +37,7 @@ def build_outline_vertex_group(obj):
         if not mat:
             continue
 
-        name = mat.name
+        name = material_name_key(mat)
         if (
             name.endswith("_Hair")
             or name.endswith("_Face")
@@ -77,11 +78,12 @@ def setup_outline_geometry_nodes(obj):
         mat = slot.material
         if not mat:
             continue
-        if mat.name.endswith("_Hair"):
+        name = material_name_key(mat)
+        if name.endswith("_Hair"):
             model_mats["HairMaterial"] = mat
-        elif mat.name.endswith("_Face"):
+        elif name.endswith("_Face"):
             model_mats["FaceMaterial"] = mat
-        elif mat.name.endswith("_Body"):
+        elif name.endswith("_Body"):
             model_mats["BodyMaterial"] = mat
 
     vg = build_outline_vertex_group(obj)

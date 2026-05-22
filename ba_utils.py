@@ -1,9 +1,11 @@
 import os
+import re
 
 import bpy
 
 
 NODE_GROUP_BLEND = "ba_node_groups.blend"
+BLENDER_DUPLICATE_SUFFIX_RE = re.compile(r"\.\d{3}$")
 
 
 def addon_dir():
@@ -18,6 +20,15 @@ def nodegroup_blend_path(log_prefix="[BA]"):
         print("   ", path)
 
     return path
+
+
+def strip_blender_duplicate_suffix(name):
+    return BLENDER_DUPLICATE_SUFFIX_RE.sub("", name or "")
+
+
+def material_name_key(mat_or_name):
+    name = getattr(mat_or_name, "name", mat_or_name)
+    return strip_blender_duplicate_suffix(name)
 
 
 def import_node_group(group_name, log_prefix="[BA]", report_missing=True):

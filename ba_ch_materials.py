@@ -5,7 +5,7 @@ from bpy.types import Operator, PropertyGroup
 
 from . import ba_shader_controls
 from . import ba_outline
-from .ba_utils import add_light_color_node, add_lit_alpha_node, clear_nodes, configure_alpha_material, ensure_node_group, ensure_output, link_alpha_to_output, new_base_color_tex, new_tex, refresh_view_layer, safe_link
+from .ba_utils import add_light_color_node, add_lit_alpha_node, clear_nodes, configure_alpha_material, ensure_node_group, ensure_output, link_alpha_to_output, material_name_key, new_base_color_tex, new_tex, refresh_view_layer, safe_link
 
 # -------- utils--------
 def build_import_image_map(images):
@@ -410,8 +410,10 @@ CHARACTER_MATERIAL_HANDLERS = (
 
 
 def setup_character_material(mat, images):
+    name = material_name_key(mat)
+
     for suffix, handler in CHARACTER_MATERIAL_HANDLERS:
-        if mat.name.endswith(suffix):
+        if name.endswith(suffix):
             handler(mat, images)
             return True
 
