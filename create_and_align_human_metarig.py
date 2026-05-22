@@ -76,6 +76,12 @@ def archive_existing_output(output_name):
     report["created"].append(f"Archived existing output as hidden {new_name}")
 
 
+def align_metarig_object_to_source(source, metarig):
+    metarig.matrix_world = source.matrix_world.copy()
+    bpy.context.view_layer.update()
+    report["derived"].append(f"Aligned {metarig.name} object transform to {source.name}")
+
+
 def create_human_metarig(source):
     output_name = output_name_for_source(source)
     archive_existing_output(output_name)
@@ -92,7 +98,12 @@ def create_human_metarig(source):
         raise RuntimeError("Rigify human metarig operator did not create an armature")
     obj.name = output_name
     obj.data.name = output_name
-    obj.scale = (INITIAL_METARIG_SCALE, INITIAL_METARIG_SCALE, INITIAL_METARIG_SCALE)
+    align_metarig_object_to_source(source, obj)
+    obj.scale = (
+        obj.scale.x * INITIAL_METARIG_SCALE,
+        obj.scale.y * INITIAL_METARIG_SCALE,
+        obj.scale.z * INITIAL_METARIG_SCALE,
+    )
     bpy.context.view_layer.update()
     bpy.ops.object.select_all(action="DESELECT")
     obj.select_set(True)
