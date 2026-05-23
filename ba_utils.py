@@ -6,6 +6,9 @@ import bpy
 
 NODE_GROUP_BLEND = "ba_node_groups.blend"
 BLENDER_DUPLICATE_SUFFIX_RE = re.compile(r"\.\d{3}$")
+CLOSEST_BASE_COLOR_MATERIAL_PREFIXES = {
+    "CH0333",
+}
 
 
 def addon_dir():
@@ -29,6 +32,17 @@ def strip_blender_duplicate_suffix(name):
 def material_name_key(mat_or_name):
     name = getattr(mat_or_name, "name", mat_or_name)
     return strip_blender_duplicate_suffix(name)
+
+
+def should_use_closest_base_color(mat_or_name=None):
+    name = material_name_key(mat_or_name)
+    if not name:
+        return False
+
+    return any(
+        name.startswith(prefix)
+        for prefix in CLOSEST_BASE_COLOR_MATERIAL_PREFIXES
+    )
 
 
 def import_node_group(group_name, log_prefix="[BA]", report_missing=True):
@@ -106,8 +120,11 @@ def new_tex(nt, img, non_color=False, loc=(0, 0), interpolation=None):
     return node
 
 
-def new_base_color_tex(nt, img, loc=(0, 0)):
-    return new_tex(nt, img, non_color=False, loc=loc, interpolation='Closest')
+def new_base_color_tex(nt, img, loc=(0, 0), interpolation=None, mat=None):
+    if interpolation is None and should_use_closest_base_color(mat):
+        interpolation = 'Closest'
+
+    return new_tex(nt, img, non_color=False, loc=loc, interpolation=interpolation)
 
 
 def safe_link(nt, out_socket, in_socket):

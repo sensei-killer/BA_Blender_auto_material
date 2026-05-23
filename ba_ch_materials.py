@@ -96,7 +96,7 @@ def setup_eyemouth(mat, images):
     clear_nodes(mat)
     nt = mat.node_tree
 
-    tex_node = new_base_color_tex(nt, tex, (-400, 0))
+    tex_node = new_base_color_tex(nt, tex, (-400, 0), mat=mat)
 
     no_shadow_node = nt.nodes.new("ShaderNodeGroup")
     no_shadow_node.node_tree = ensure_node_group("ba_no_shadow")
@@ -129,7 +129,7 @@ def setup_body(mat, images):
         print(f"[BA] Body texture missing: {mat.name}")
         return
 
-    body = new_base_color_tex(nt, tex_body, (-600, 100))
+    body = new_base_color_tex(nt, tex_body, (-600, 100), mat=mat)
     mask = new_tex(nt, tex_mask, True, (-600, -100)) if tex_mask else None
 
     shader = nt.nodes.new("ShaderNodeGroup")
@@ -165,7 +165,7 @@ def setup_face(mat, images):
         print(f"[BA] Face texture missing: {mat.name}")
         return
 
-    face = new_base_color_tex(nt, tex_face, (-600, 100))
+    face = new_base_color_tex(nt, tex_face, (-600, 100), mat=mat)
     mask = new_tex(nt, tex_mask, True, (-600, -100)) if tex_mask else None
 
     shader = nt.nodes.new("ShaderNodeGroup")
@@ -201,7 +201,7 @@ def setup_hair(mat, images):
         print(f"[BA] Hair texture missing: {mat.name}")
         return
 
-    hair = new_base_color_tex(nt, tex_hair, (-600, 200))
+    hair = new_base_color_tex(nt, tex_hair, (-600, 200), mat=mat)
     mask = new_tex(nt, tex_mask, True, (-600, 0)) if tex_mask else None
     spec = new_tex(nt, tex_spec, True, (-600, -200)) if tex_spec else None
 
@@ -277,7 +277,7 @@ def setup_eyebrow(mat, images):
     clear_nodes(mat)
     nt = mat.node_tree
 
-    tex_node = new_base_color_tex(nt, tex, (-400, 0))
+    tex_node = new_base_color_tex(nt, tex, (-400, 0), mat=mat)
 
     # ba_no_shadow
     no_shadow_node = nt.nodes.new("ShaderNodeGroup")
@@ -319,7 +319,7 @@ def setup_body_alpha(mat, images):
         print(f"[BA] Body texture missing: {mat.name}")
         return
 
-    body = new_base_color_tex(nt, tex_body, (-800, 100))
+    body = new_base_color_tex(nt, tex_body, (-800, 100), mat=mat)
     mask = new_tex(nt, tex_mask, True, (-800, -100)) if tex_mask else None
 
     body_shader = nt.nodes.new("ShaderNodeGroup")
@@ -360,7 +360,7 @@ def setup_hair_alpha(mat, images):
         print(f"[BA] Hair texture missing: {mat.name}")
         return
 
-    hair = new_base_color_tex(nt, tex_hair, (-800, 200))
+    hair = new_base_color_tex(nt, tex_hair, (-800, 200), mat=mat)
     mask = new_tex(nt, tex_mask, True, (-800, 0)) if tex_mask else None
     spec = new_tex(nt, tex_spec, True, (-800, -200)) if tex_spec else None
 
