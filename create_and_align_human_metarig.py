@@ -17,6 +17,8 @@ OUTPUT_NAME_SUFFIX = "_metarig_auto"
 BACKUP_EXISTING_OUTPUT = True
 INITIAL_METARIG_SCALE = 0.38
 HEAD_BONE_LENGTH = 0.25
+STRUCTURAL_TOE_LENGTH = 0.06
+STRUCTURAL_TOE_ROOT_DISTANCE = 0.04
 
 REMOVE_FACE = True
 REMOVE_MISSING_OPTIONAL_FINGERS = True
@@ -208,6 +210,18 @@ def source_character_height(source):
     return max(p.z for p in points) - min(p.z for p in points)
 
 
+def source_ground_height(source, ground_meshes=None):
+    heights = []
+    for mesh in ground_meshes or []:
+        if mesh is None or mesh.type != "MESH":
+            continue
+        matrix_world = mesh.matrix_world
+        heights.extend((matrix_world @ vertex.co).z for vertex in mesh.data.vertices)
+    if heights:
+        return min(heights)
+    return source.matrix_world.translation.z
+
+
 def set_edit_bone(edit_bones, target, name, head_world, tail_world, fallback_dir=WORLD_Z):
     eb = edit_bones.get(name)
     if eb is None:
@@ -364,17 +378,39 @@ def align_finger_chain(edit_bones, target, original_points, side, rig_prefix, fi
     report["derived"].append(f"{b1}/{b2}/{b3} use joint axis, not source short-bone tail")
 
 
-def align_toe(edit_bones, target, original_points, side, toe_head, foot_head):
+def source_toe_points(source, side, ground_z):
+    src_side = "L" if side == "L" else "R"
+    foot_name = f"Bip001 {src_side} Foot"
+    toe_name = f"Bip001 {src_side} Toe0"
+    foot_head = src_head(source, foot_name)
+    toe = source.data.bones.get(toe_name)
+    if toe is not None:
+        return foot_head, src_head(source, toe_name), src_tail(source, toe_name)
+
+    toe_rig_name = f"toe.{side}"
+    foot_tail = src_tail(source, foot_name)
+    toe_head = None
+    toe_tail = None
+    if foot_head is not None and foot_tail is not None:
+        foot_direction = normalized_or(foot_tail - foot_head, WORLD_NEG_Y)
+        toe_head = foot_head + foot_direction * STRUCTURAL_TOE_ROOT_DISTANCE
+        toe_head.z = ground_z
+        toe_tail = toe_head + WORLD_Z * STRUCTURAL_TOE_LENGTH
+    report["derived"].append(
+        f"{toe_rig_name} uses a grounded vertical structural segment because {toe_name} is absent"
+    )
+    return foot_head, toe_head, toe_tail
+
+
+def align_toe(edit_bones, target, side, toe_head, toe_tail):
     suffix = ".L" if side == "L" else ".R"
     name = f"toe{suffix}"
-    fallback_dir = original_points.get(name, {}).get("direction", WORLD_NEG_Y)
-    axis = horizontal_direction((toe_head - foot_head) if toe_head is not None and foot_head is not None else None, fallback_dir)
-    length = original_points.get(name, {}).get("length", 0.026)
-    set_edit_bone(edit_bones, target, name, toe_head, toe_head + axis * length, axis)
-    report["derived"].append(f"{name} derived from horizontal foot-to-toe axis")
+    direction = (toe_tail - toe_head) if toe_head is not None and toe_tail is not None else WORLD_Z
+    if set_edit_bone(edit_bones, target, name, toe_head, toe_tail, direction):
+        report["derived"].append(f"{name} aligned to the source or grounded structural toe segment")
 
 
-def derive_heel(source, target, edit_bones, side, foot_name, toe_name):
+def derive_heel(target, edit_bones, side, foot_head, toe_head, toe_tail):
     suffix = ".L" if side == "L" else ".R"
     name = f"heel.02{suffix}"
     eb = edit_bones.get(name)
@@ -382,9 +418,6 @@ def derive_heel(source, target, edit_bones, side, foot_name, toe_name):
         report["missing_target"].append(name)
         return
 
-    foot_head = src_head(source, foot_name)
-    toe_head = src_head(source, toe_name)
-    toe_tail = src_tail(source, toe_name)
     if foot_head is None or toe_head is None:
         report["warnings"].append(f"Skipped {name}: missing foot/toe source")
         return
@@ -401,7 +434,7 @@ def derive_heel(source, target, edit_bones, side, foot_name, toe_name):
     report["derived"].append(f"{name} derived from foot/toe contact")
 
 
-def align_side(source, target, edit_bones, original_points, side):
+def align_side(source, target, edit_bones, original_points, side, ground_z):
     src_side = "L" if side == "L" else "R"
     suffix = ".L" if side == "L" else ".R"
 
@@ -429,15 +462,15 @@ def align_side(source, target, edit_bones, original_points, side):
     thigh = f"Bip001 {src_side} Thigh"
     calf = f"Bip001 {src_side} Calf"
     foot = f"Bip001 {src_side} Foot"
-    toe = f"Bip001 {src_side} Toe0"
+    foot_head, toe_head, toe_tail = source_toe_points(source, side, ground_z)
 
     align_chain(edit_bones, target, [
         (f"thigh{suffix}", src_head(source, thigh), src_head(source, calf)),
         (f"shin{suffix}", src_head(source, calf), src_head(source, foot)),
-        (f"foot{suffix}", src_head(source, foot), src_head(source, toe)),
+        (f"foot{suffix}", foot_head, toe_head),
     ])
-    align_toe(edit_bones, target, original_points, side, src_head(source, toe), src_head(source, foot))
-    derive_heel(source, target, edit_bones, side, foot, toe)
+    align_toe(edit_bones, target, side, toe_head, toe_tail)
+    derive_heel(target, edit_bones, side, foot_head, toe_head, toe_tail)
 
     pelvis_head = src_head(source, "Bip001 Pelvis")
     thigh_head = src_head(source, thigh)
@@ -507,8 +540,21 @@ def align_breast_optional(source, target, edit_bones, original_points):
             report["warnings"].append(f"Optional source missing: {source_name}")
 
 
-def align_metarig(source, target):
+def disable_ik_toe_for_missing_source(source, target):
+    for side in ("L", "R"):
+        source_name = f"Bip001 {side} Toe0"
+        if source.data.bones.get(source_name) is not None:
+            continue
+        leg = target.pose.bones.get(f"thigh.{side}")
+        parameters = leg.rigify_parameters if leg else None
+        if parameters is not None and hasattr(parameters, "extra_ik_toe"):
+            parameters.extra_ik_toe = False
+            report["derived"].append(f"Disabled extra IK toe control for missing source {source_name}")
+
+
+def align_metarig(source, target, ground_meshes=None):
     original_points = original_world_bone_points(target)
+    ground_z = source_ground_height(source, ground_meshes)
     bpy.ops.object.mode_set(mode="OBJECT")
     bpy.ops.object.select_all(action="DESELECT")
     target.select_set(True)
@@ -520,10 +566,11 @@ def align_metarig(source, target):
     delete_missing_optional_fingers(source, edit_bones)
     align_spine(source, target, edit_bones, original_points)
     align_breast_optional(source, target, edit_bones, original_points)
-    align_side(source, target, edit_bones, original_points, "L")
-    align_side(source, target, edit_bones, original_points, "R")
+    align_side(source, target, edit_bones, original_points, "L", ground_z)
+    align_side(source, target, edit_bones, original_points, "R", ground_z)
 
     bpy.ops.object.mode_set(mode="OBJECT")
+    disable_ik_toe_for_missing_source(source, target)
 
 
 def dedupe_report():
@@ -549,12 +596,12 @@ def print_report():
     print("=== End report ===\n")
 
 
-def main(source=None):
+def main(source=None, ground_meshes=None):
     for values in report.values():
         values.clear()
     source = source or resolve_source_armature()
     target = create_human_metarig(source)
-    align_metarig(source, target)
+    align_metarig(source, target, ground_meshes)
     print_report()
     return target
 

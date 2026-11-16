@@ -53,8 +53,8 @@ def select_only(objects, active=None):
     bpy.context.view_layer.objects.active = active or (objects[0] if objects else None)
 
 
-def create_and_align_metarig(source):
-    return create_script.main(source)
+def create_and_align_metarig(source, ground_meshes=None):
+    return create_script.main(source, ground_meshes)
 
 
 def generate_rigify_rig(metarig, source):
@@ -106,7 +106,7 @@ def preflight(source, meshes):
         if source.data.bones.get(name) is None:
             raise RuntimeError(f'Source rig is missing required bone: {name}')
     for side in ('L', 'R'):
-        for name in ('Clavicle', 'UpperArm', 'Forearm', 'Hand', 'Thigh', 'Calf', 'Foot', 'Toe0', 'Finger0', 'Finger01', 'Finger1', 'Finger11', 'Finger2', 'Finger21'):
+        for name in ('Clavicle', 'UpperArm', 'Forearm', 'Hand', 'Thigh', 'Calf', 'Foot', 'Finger0', 'Finger01', 'Finger1', 'Finger11', 'Finger2', 'Finger21'):
             bone = f'Bip001 {side} {name}'
             if source.data.bones.get(bone) is None:
                 raise RuntimeError(f'Source rig is missing required bone: {bone}')
@@ -139,7 +139,7 @@ def main():
     state = ConversionState(bpy.context, source, meshes, body_meshes)
     try:
         state.begin()
-        result = run_pipeline(source, meshes)
+        result = run_pipeline(source, meshes, body_meshes)
     except Exception as exc:
         try:
             errors = state.rollback()
@@ -155,12 +155,12 @@ def main():
     return result
 
 
-def run_pipeline(source, meshes):
+def run_pipeline(source, meshes, ground_meshes=None):
     print("\n=== Auto Rigify bind pipeline ===")
     print(f"Source armature: {source.name}")
     print(f"Meshes: {[mesh.name for mesh in meshes]}")
 
-    metarig = create_and_align_metarig(source)
+    metarig = create_and_align_metarig(source, ground_meshes)
     print(f"Generated aligned metarig: {metarig.name}")
 
     generated_rig = generate_rigify_rig(metarig, source)
