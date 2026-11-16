@@ -4,13 +4,13 @@ from pathlib import Path
 if __package__:
     from . import create_and_align_human_metarig as create_script
     from . import migrate_body_to_rig_auto as migrate_script
-    from .ba_rigify_state import ConversionState
+    from .ba_rigify_state import ConversionState, ConversionRecoveryError
 else:
     import sys
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import create_and_align_human_metarig as create_script
     import migrate_body_to_rig_auto as migrate_script
-    from ba_rigify_state import ConversionState
+    from ba_rigify_state import ConversionState, ConversionRecoveryError
 
 # One-click pipeline:
 # 1. Select one source/original armature and one or more meshes.
@@ -141,10 +141,17 @@ def main():
         state.begin()
         result = run_pipeline(source, meshes)
     except Exception as exc:
-        errors = state.rollback()
+        try:
+            errors = state.rollback()
+        except Exception as recovery_exc:
+            errors = [str(recovery_exc)]
         detail = '; recovery incomplete, generated data retained: ' + '; '.join(errors) if errors else '; original data restored'
-        raise RuntimeError(f'Rigify conversion failed: {exc}{detail}') from exc
-    state.release_new_data()
+        error_type = ConversionRecoveryError if errors else RuntimeError
+        raise error_type(f'Rigify conversion failed: {exc}{detail}') from exc
+    try:
+        state.release_new_data()
+    except Exception as exc:
+        raise ConversionRecoveryError(f'Rigify conversion completed but cleanup failed: {exc}') from exc
     return result
 
 

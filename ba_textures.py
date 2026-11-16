@@ -22,16 +22,21 @@ def load_selected_images(directory, files):
         paths.append(path)
     images = []
     existing = set(bpy.data.images)
-    for path in paths:
-        try:
-            image = bpy.data.images.load(path, check_existing=True)
-        except (OSError, RuntimeError) as exc:
-            raise MaterialSetupError(f'Cannot read selected image: {path}: {exc}') from exc
-        if image.size[0] <= 0 or image.size[1] <= 0:
-            if image not in existing and image.users == 0:
+    try:
+        for path in paths:
+            try:
+                image = bpy.data.images.load(path, check_existing=True)
+            except (OSError, RuntimeError) as exc:
+                raise MaterialSetupError(f'Cannot read selected image: {path}: {exc}') from exc
+            if image.size[0] <= 0 or image.size[1] <= 0:
+                raise MaterialSetupError(f'Selected file has no readable image data: {path}')
+            images.append(image)
+    except MaterialSetupError:
+        # CANCELLED must not retain earlier images from a partially read batch.
+        for image in set(bpy.data.images) - existing:
+            if image.users == 0:
                 bpy.data.images.remove(image)
-            raise MaterialSetupError(f'Selected file has no readable image data: {path}')
-        images.append(image)
+        raise
     return images
 
 

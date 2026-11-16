@@ -27,6 +27,7 @@ from .ba_textures import MaterialSetupError, load_selected_images
 class BA_OT_setup_prop(Operator):
     bl_idname = "ba.setup_materials_prop"
     bl_label = "Setup weapon/props materials"
+    bl_options = {'REGISTER', 'UNDO'}
 
     files: CollectionProperty(type=OperatorFileListElement, options={'HIDDEN', 'SKIP_SAVE'})
     directory: StringProperty(subtype='DIR_PATH')
@@ -68,7 +69,9 @@ class BA_OT_setup_prop(Operator):
             except MaterialSetupError as exc:
                 self.report({'WARNING'}, str(exc))
         if not successful:
-            return {'CANCELLED'}
+            # Images, resource groups or a default material may already exist.
+            self.report({'WARNING'}, "No prop materials were set; use Undo to restore prepared data")
+            return {'FINISHED'}
 
             
         ba_props_outline.add_ba_props_outline(context)
@@ -82,6 +85,8 @@ class BA_OT_setup_prop(Operator):
 class BA_OT_setup_halo(Operator):
     bl_idname = "ba.setup_materials_halo"
     bl_label = "Setup halo materials"
+
+    # This launcher edits no data; the file-selector operator owns the undo step.
   
     def execute(self, context):
         ba_halo.setup_halo(context)
@@ -91,6 +96,7 @@ class BA_OT_setup_halo(Operator):
 class BA_OT_setup_mouth(Operator):
     bl_idname = "ba.setup_mouth"
     bl_label = "Add mouth"
+    bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         ba_mouth.setup_mouth(context)
@@ -100,6 +106,7 @@ class BA_OT_setup_mouth(Operator):
 class BA_OT_set_color_management(Operator):
     bl_idname = "ba.set_color_management"
     bl_label = "Set color management"
+    bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         scene = context.scene
@@ -118,6 +125,9 @@ class BA_OT_convert_to_rigify(Operator):
     def execute(self, context):
         try:
             ba_rigify.run_convert_to_rigify()
+        except ba_rigify.ConversionRecoveryError as exc:
+            self.report({'WARNING'}, f'{exc}; use Undo to restore the previous state')
+            return {'FINISHED'}
         except RuntimeError as exc:
             self.report({'ERROR'}, str(exc))
             return {'CANCELLED'}

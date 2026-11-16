@@ -3,6 +3,10 @@
 import bpy
 
 
+class ConversionRecoveryError(RuntimeError):
+    """Conversion left changes behind that must remain undoable."""
+
+
 def copy_value(value):
     if isinstance(value, bpy.types.ID):
         return value

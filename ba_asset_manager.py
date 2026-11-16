@@ -174,12 +174,14 @@ class BA_OT_update_resources(bpy.types.Operator):
     bl_idname = 'ba.update_resources'
     bl_label = 'Update Node Resources'
     bl_description = 'Update shader and outline groups, preserving instance values and retaining old groups as backups'
+    bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         try:
             nodes, modifiers = upgrade_resources()
         except Exception as exc:
-            self.report({'ERROR'}, str(exc))
-            return {'CANCELLED'}
+            # Keep a boundary even if exception recovery itself was incomplete.
+            self.report({'WARNING'}, f'Resource update failed: {exc}; use Undo to restore the previous state')
+            return {'FINISHED'}
         self.report({'INFO'}, f'Updated {nodes} group nodes and {modifiers} modifiers; backups retained')
         return {'FINISHED'}

@@ -470,6 +470,7 @@ def setup_character_material(mat, images):
 class BA_OT_setup_materials(Operator):
     bl_idname = "ba.setup_materials_ch"
     bl_label = "Setup Character Materials"
+    bl_options = {'REGISTER', 'UNDO'}
 
     files: CollectionProperty(type=OperatorFileListElement, options={'HIDDEN', 'SKIP_SAVE'})
     directory: StringProperty(subtype='DIR_PATH')
@@ -503,7 +504,9 @@ class BA_OT_setup_materials(Operator):
             except MaterialSetupError as exc:
                 self.report({'WARNING'}, str(exc))
         if not successful:
-            return {'CANCELLED'}
+            # Material isolation and resource preparation can already change data.
+            self.report({'WARNING'}, "No character materials were set; use Undo to restore prepared data")
+            return {'FINISHED'}
         ba_shader_controls.remove_shared_node_group_drivers()
         ba_shader_controls.bind_character_controls(context, successful)
 

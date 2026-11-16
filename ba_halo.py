@@ -3,8 +3,10 @@ import bpy
 import os
 from bpy_extras.io_utils import ImportHelper
 from bpy.props import StringProperty
+from types import SimpleNamespace
 
-from .ba_utils import ensure_node_group, safe_link
+from .ba_textures import MaterialSetupError, load_selected_images
+from .ba_utils import require_node_groups, safe_link
 
 class BA_OT_halo_pick_image(bpy.types.Operator, ImportHelper):
     """Pick image and apply emission material"""
@@ -26,17 +28,26 @@ class BA_OT_halo_pick_image(bpy.types.Operator, ImportHelper):
             return {'CANCELLED'}
 
         image_path = self.filepath
-        image_name = os.path.basename(image_path)
+        try:
+            image = load_selected_images(
+                os.path.dirname(image_path),
+                [SimpleNamespace(name=os.path.basename(image_path))],
+            )[0]
+        except MaterialSetupError as exc:
+            self.report({'WARNING'}, str(exc))
+            return {'CANCELLED'}
 
-
-        image = bpy.data.images.get(image_name)
-        if not image:
-            image = bpy.data.images.load(image_path)
-
+        try:
+            halo_group = require_node_groups({'ba_halo': ((), ())})['ba_halo']
+            sockets = [s for s in halo_group.interface.items_tree if s.item_type == 'SOCKET']
+            if not any(s.in_out == 'INPUT' for s in sockets) or not any(s.in_out == 'OUTPUT' for s in sockets):
+                raise MaterialSetupError('ba_halo must have input and output sockets')
+        except MaterialSetupError as exc:
+            self.report({'WARNING'}, f'{exc}; use Undo to restore prepared data')
+            return {'FINISHED'}
 
         mat = bpy.data.materials.new(name="BA_Halo_Emission")
         mat.use_nodes = True
-
         nodes = mat.node_tree.nodes
         nodes.clear()
 
@@ -44,11 +55,6 @@ class BA_OT_halo_pick_image(bpy.types.Operator, ImportHelper):
         tex.image = image
         tex.location = (-400, 0)
 
-        halo_group = ensure_node_group("ba_halo")
-        if not halo_group:
-            self.report({'ERROR'}, "ba_halo node group not found")
-            return {'CANCELLED'}
-            
         halo = nodes.new("ShaderNodeGroup")
         halo.node_tree = halo_group
         halo.location = (-150, 0)
@@ -69,4 +75,4 @@ class BA_OT_halo_pick_image(bpy.types.Operator, ImportHelper):
         return {'FINISHED'}
 
 def setup_halo(context):
-    bpy.ops.ba.halo_pick_image('INVOKE_DEFAULT')
+    bpy.ops.ba.halo_pick_image('INVOKE_DEFAULT', True)
