@@ -17,7 +17,6 @@ from . import ba_halo
 from . import ba_mouth
 from . import ba_ch_materials
 from . import ba_rigify
-from . import ba_asset_manager
 from .ba_utils import refresh_view_layer
 from .ba_textures import MaterialSetupError, load_selected_images
 
@@ -156,7 +155,6 @@ class BA_PT_panel(Panel):
         layout.operator("ba.setup_mouth", icon='MATERIAL')
         layout.operator("ba.convert_to_rigify", icon='ARMATURE_DATA')
         layout.operator("ba.set_color_management", icon='COLOR')
-        layout.operator("ba.update_resources", icon='FILE_REFRESH')
 
 
 # ---------------- register ----------------
@@ -168,7 +166,6 @@ classes = (
     BA_OT_setup_mouth,
     BA_OT_convert_to_rigify,
     BA_OT_set_color_management,
-    ba_asset_manager.BA_OT_update_resources,
     BA_PT_panel,
     ba_halo.BA_OT_halo_pick_image,
 )
