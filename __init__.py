@@ -9,9 +9,8 @@ bl_info = {
 }
 
 import bpy
-import os
 from bpy.props import StringProperty, CollectionProperty
-from bpy.types import Operator, Panel, PropertyGroup
+from bpy.types import Operator, Panel, OperatorFileListElement
 from . import ba_props
 from . import ba_props_outline
 from . import ba_halo
@@ -20,7 +19,7 @@ from . import ba_ch_materials
 from . import ba_rigify
 from . import ba_asset_manager
 from .ba_utils import refresh_view_layer
-from .ba_textures import MaterialSetupError
+from .ba_textures import MaterialSetupError, load_selected_images
 
 # ---------------- operator ----------------
 
@@ -29,20 +28,20 @@ class BA_OT_setup_prop(Operator):
     bl_idname = "ba.setup_materials_prop"
     bl_label = "Setup weapon/props materials"
 
-    files: CollectionProperty(type=PropertyGroup)
+    files: CollectionProperty(type=OperatorFileListElement, options={'HIDDEN', 'SKIP_SAVE'})
     directory: StringProperty(subtype='DIR_PATH')
+    filter_glob: StringProperty(default='*.png;*.jpg;*.jpeg;*.tga;*.bmp;*.tif;*.tiff;*.dds;*.exr;*.hdr;*.webp', options={'HIDDEN'})
 
     def invoke(self, context, event):
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
     def execute(self, context):
-        images = []
-
-        for f in self.files:
-            path = os.path.join(self.directory, f.name)
-            img = bpy.data.images.load(path, check_existing=True)
-            images.append(img)
+        try:
+            images = load_selected_images(self.directory, self.files)
+        except MaterialSetupError as exc:
+            self.report({'WARNING'}, str(exc))
+            return {'CANCELLED'}
 
         mats = set()
 

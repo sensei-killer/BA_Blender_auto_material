@@ -10,6 +10,31 @@ class MaterialSetupError(RuntimeError):
     pass
 
 
+def load_selected_images(directory, files):
+    paths = []
+    for item in files:
+        name = item.name
+        if not name or not name.strip():
+            raise MaterialSetupError('No image filename was received. Select image files and try again.')
+        path = os.path.join(bpy.path.abspath(directory), name)
+        if not os.path.isfile(path):
+            raise MaterialSetupError(f'Selected image is missing or is not a file: {path}')
+        paths.append(path)
+    images = []
+    existing = set(bpy.data.images)
+    for path in paths:
+        try:
+            image = bpy.data.images.load(path, check_existing=True)
+        except (OSError, RuntimeError) as exc:
+            raise MaterialSetupError(f'Cannot read selected image: {path}: {exc}') from exc
+        if image.size[0] <= 0 or image.size[1] <= 0:
+            if image not in existing and image.users == 0:
+                bpy.data.images.remove(image)
+            raise MaterialSetupError(f'Selected file has no readable image data: {path}')
+        images.append(image)
+    return images
+
+
 def name_key(name):
     return re.sub(r"\.\d{3,}$", "", name or "").casefold()
 

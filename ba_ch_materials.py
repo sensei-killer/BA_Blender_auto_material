@@ -2,11 +2,11 @@ import bpy
 import os
 from functools import wraps
 from bpy.props import StringProperty, CollectionProperty
-from bpy.types import Operator, PropertyGroup
+from bpy.types import Operator, OperatorFileListElement
 
 from . import ba_shader_controls
 from . import ba_outline
-from .ba_textures import MaterialSetupError, find_character_image, image_key
+from .ba_textures import MaterialSetupError, find_character_image, image_key, load_selected_images
 from .ba_utils import require_node_groups
 from .ba_utils import add_light_color_node, add_lit_alpha_node, clear_nodes, configure_alpha_material, ensure_node_group, ensure_output, link_alpha_to_output, material_name_key, new_base_color_tex, new_tex, refresh_view_layer, safe_link
 
@@ -471,19 +471,20 @@ class BA_OT_setup_materials(Operator):
     bl_idname = "ba.setup_materials_ch"
     bl_label = "Setup Character Materials"
 
-    files: CollectionProperty(type=PropertyGroup)
+    files: CollectionProperty(type=OperatorFileListElement, options={'HIDDEN', 'SKIP_SAVE'})
     directory: StringProperty(subtype='DIR_PATH')
+    filter_glob: StringProperty(default='*.png;*.jpg;*.jpeg;*.tga;*.bmp;*.tif;*.tiff;*.dds;*.exr;*.hdr;*.webp', options={'HIDDEN'})
 
     def invoke(self, context, event):
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
     def execute(self, context):
-        images = []
-        for f in self.files:
-            path = os.path.join(self.directory, f.name)
-            img = bpy.data.images.load(path, check_existing=True)
-            images.append(img)
+        try:
+            images = load_selected_images(self.directory, self.files)
+        except MaterialSetupError as exc:
+            self.report({'WARNING'}, str(exc))
+            return {'CANCELLED'}
 
         ba_shader_controls.isolate_character_materials(context)
         mats = set()

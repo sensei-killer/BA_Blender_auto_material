@@ -26,7 +26,12 @@ def configure_alpha_material(material):
 def modifier_socket(modifier, identifier):
     properties = getattr(modifier, "properties", None)
     inputs = getattr(properties, "inputs", None)
-    return getattr(inputs, identifier, None) if inputs is not None else None
+    if inputs is None:
+        return None
+    socket = getattr(inputs, identifier, None)
+    if socket is None:
+        raise RuntimeError(f'Geometry Nodes input {identifier!r} is unavailable on {modifier.name!r}; check the node group interface')
+    return socket
 
 
 def set_modifier_input(modifier, identifier, value=None, attribute=None):
