@@ -1,10 +1,13 @@
 import bpy
 import os
+from functools import wraps
 from bpy.props import StringProperty, CollectionProperty
 from bpy.types import Operator, PropertyGroup
 
 from . import ba_shader_controls
 from . import ba_outline
+from .ba_textures import MaterialSetupError, find_character_image, image_key
+from .ba_utils import require_node_groups
 from .ba_utils import add_light_color_node, add_lit_alpha_node, clear_nodes, configure_alpha_material, ensure_node_group, ensure_output, link_alpha_to_output, material_name_key, new_base_color_tex, new_tex, refresh_view_layer, safe_link
 
 # -------- utils--------
@@ -26,14 +29,7 @@ def build_import_image_map(images):
 
 def find_image(images, keyword):
     for img in images:
-        if not img.filepath:
-            continue
-
-        name = os.path.splitext(
-            os.path.basename(bpy.path.abspath(img.filepath))
-        )[0]
-
-        if name.lower().endswith(keyword.lower()):
+        if image_key(img).endswith(keyword.lower()):
             return img
     return None
 
@@ -61,6 +57,48 @@ def detect_material_base_type(mat):
     return None
 
 # -------- setup functions --------
+def prepared_character(kind):
+    def decorate(function):
+        @wraps(function)
+        def prepare(mat, images):
+            base = kind.split('_')[0]
+            if base == 'EYEBROW':
+                base = detect_material_base_type(mat)
+            roles = {
+                'BODY': ('Body', 'Body_Mask'),
+                'FACE': ('Face', 'Face_Mask'),
+                'HAIR': ('Hair', 'Hair_Mask', 'Hair_Spec'),
+                'EYEMOUTH': ('EyeMouth',),
+            }.get(base, ())
+            resolved = [find_character_image(images, role, mat) for role in roles]
+            if roles and resolved[0] is None:
+                raise MaterialSetupError(f"{mat.name}: required {roles[0]} texture missing")
+            groups = {}
+            if kind.startswith(('BODY', 'FACE', 'HAIR')):
+                group = 'ba_' + base.lower() + '_shader'
+                inputs = ['basecolor', 'mask']
+                if base in {'FACE', 'HAIR'}:
+                    inputs.append('Rotation')
+                if base == 'BODY':
+                    inputs.append('mask_alpha')
+                if base == 'HAIR':
+                    inputs.extend(('Spec', 'specalpha'))
+                groups[group] = (inputs, ('Result',))
+            else:
+                groups['ba_no_shadow'] = (('Color',), ('Shader',))
+                if kind == 'EYEBROW':
+                    groups['eyebrow_in_front'] = ((), ('Displacement',))
+            if roles:
+                groups['ba_light_color'] = (('Color', 'basecolor'), ('Color',))
+            if kind.endswith('_ALPHA'):
+                groups['ba_alpha'] = (('color', 'alpha'), ('Shader',))
+            require_node_groups(groups)
+            mat.use_nodes = True
+            return function(mat, [image for image in resolved if image is not None])
+        return prepare
+    return decorate
+
+
 def setup_emission(mat, image, strength=1.0):
     if image is None:
         print(f"[BA] Emission image missing for {mat.name}")
@@ -83,6 +121,7 @@ def setup_emission(mat, image, strength=1.0):
     safe_link(nt, tex.outputs.get('Color'), emission.inputs.get('Color'))
     safe_link(nt, emission.outputs.get('Emission'), out.inputs.get('Surface'))
 
+@prepared_character('EYEMOUTH')
 def setup_eyemouth(mat, images):
 
     if not mat.use_nodes:
@@ -118,6 +157,7 @@ def setup_eyemouth(mat, images):
 
 
 
+@prepared_character('BODY')
 def setup_body(mat, images):
     clear_nodes(mat)
     nt = mat.node_tree
@@ -154,6 +194,7 @@ def setup_body(mat, images):
     safe_link(nt, light_color.outputs.get('Color'), out.inputs['Surface'])
 
 
+@prepared_character('FACE')
 def setup_face(mat, images):
     clear_nodes(mat)
     nt = mat.node_tree
@@ -189,6 +230,7 @@ def setup_face(mat, images):
     safe_link(nt, light_color.outputs.get('Color'), out.inputs['Surface'])
 
 
+@prepared_character('HAIR')
 def setup_hair(mat, images):
     clear_nodes(mat)
     nt = mat.node_tree
@@ -229,6 +271,7 @@ def setup_hair(mat, images):
 
     safe_link(nt, light_color.outputs.get('Color'), out.inputs['Surface'])
 
+@prepared_character('EYEBROW')
 def setup_eyebrow(mat, images):
     if not mat.use_nodes:
         mat.use_nodes = True
@@ -306,6 +349,7 @@ def setup_eyebrow(mat, images):
 
     mat.displacement_method = 'BOTH'
 
+@prepared_character('BODY_ALPHA')
 def setup_body_alpha(mat, images):
     clear_nodes(mat)
     nt = mat.node_tree
@@ -346,6 +390,7 @@ def setup_body_alpha(mat, images):
     link_alpha_to_output(nt, alpha_shader, out)
 
 
+@prepared_character('HAIR_ALPHA')
 def setup_hair_alpha(mat, images):
     clear_nodes(mat)
     nt = mat.node_tree
@@ -440,26 +485,26 @@ class BA_OT_setup_materials(Operator):
             img = bpy.data.images.load(path, check_existing=True)
             images.append(img)
 
+        ba_shader_controls.isolate_character_materials(context)
         mats = set()
         for obj in context.selected_objects:
             if obj.type != 'MESH':
                 continue
             for slot in obj.material_slots:
-                if slot.material and slot.material.use_nodes:
+                if slot.material:
                     mats.add(slot.material)
 
+        successful = set()
         for mat in mats:
-            setup_character_material(mat, images)
-
+            try:
+                if setup_character_material(mat, images):
+                    successful.add(mat)
+            except MaterialSetupError as exc:
+                self.report({'WARNING'}, str(exc))
+        if not successful:
+            return {'CANCELLED'}
         ba_shader_controls.remove_shared_node_group_drivers()
-        ba_shader_controls.ensure_hair_spec_control(context)
-        ba_shader_controls.ensure_face_light_dot_control(context)
-
-        empty = bpy.data.objects.get("face_light_dot")
-        ba_shader_controls.add_face_rotation_drivers(empty, context)
-
-        empty = bpy.data.objects.get("hair_spec_normal")
-        ba_shader_controls.add_hair_rotation_drivers(empty, context)
+        ba_shader_controls.bind_character_controls(context, successful)
 
         ba_outline.add_ba_outline(context)
         refresh_view_layer(context)

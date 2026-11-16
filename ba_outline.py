@@ -1,4 +1,5 @@
 import bpy
+from .ba_compat import set_modifier_input
 
 from .ba_utils import (
     ensure_socket_is_attribute,
@@ -115,11 +116,11 @@ def setup_outline_geometry_nodes(obj):
 
         if name == "Group" and vg:
             ensure_socket_is_attribute(obj, mod, ident)
-            mod[f"{ident}_attribute_name"] = vg.name
+            set_modifier_input(mod, ident, attribute=vg.name)
             continue
 
         if name in values and isinstance(values[name], bpy.types.ID):
-            mod[ident] = values[name]
+            set_modifier_input(mod, ident, values[name])
 
 
 

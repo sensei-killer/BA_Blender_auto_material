@@ -1,4 +1,5 @@
 import bpy
+from .ba_compat import set_modifier_input
 
 from .ba_utils import (
     ensure_socket_is_attribute,
@@ -93,19 +94,19 @@ def setup_prop_outline_geometry_nodes(obj):
         # Group Attribute
         if name == "Group" and vg:
             ensure_socket_is_attribute(obj, mod, ident)
-            mod[f"{ident}_attribute_name"] = vg.name
+            set_modifier_input(mod, ident, attribute=vg.name)
             continue
 
         # Outline
         if name == "Outline":
-            mod[ident] = outline_mat
+            set_modifier_input(mod, ident, outline_mat)
             continue
             
         # Alpha Material
         if name == "Alpha_Material":
             alpha_mat = find_alpha_material(obj)
             if alpha_mat:
-                mod[ident] = alpha_mat
+                set_modifier_input(mod, ident, alpha_mat)
             continue
 
     refresh_modifier_viewport(obj, mod)

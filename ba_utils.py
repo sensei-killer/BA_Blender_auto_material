@@ -3,9 +3,12 @@ import re
 
 import bpy
 
+from .ba_compat import configure_alpha_material, set_image_color_space, set_modifier_input
+from .ba_textures import MaterialSetupError
+
 
 NODE_GROUP_BLEND = "ba_node_groups.blend"
-BLENDER_DUPLICATE_SUFFIX_RE = re.compile(r"\.\d{3}$")
+BLENDER_DUPLICATE_SUFFIX_RE = re.compile(r"\.\d{3,}$")
 CLOSEST_BASE_COLOR_MATERIAL_PREFIXES = {
     "CH0333",
 }
@@ -93,11 +96,6 @@ def clear_nodes(mat):
     nt.nodes.clear()
 
 
-def configure_alpha_material(mat):
-    mat.surface_render_method = 'BLENDED'
-    mat.show_transparent_back = False
-
-
 def refresh_view_layer(context):
     context.view_layer.update()
 
@@ -113,8 +111,7 @@ def new_tex(nt, img, non_color=False, loc=(0, 0), interpolation=None):
 
     if node.image:
         node.image.alpha_mode = 'CHANNEL_PACKED'
-        if non_color:
-            node.image.colorspace_settings.name = 'Non-Color'
+        set_image_color_space(node.image, non_color)
 
     node.location = loc
     return node
@@ -221,13 +218,24 @@ def remove_existing_nodes_modifier(obj, node_group_name):
 
 
 def ensure_socket_is_attribute(obj, modifier, socket_identifier):
-    view_layer = bpy.context.view_layer
-    view_layer.objects.active = obj
+    set_modifier_input(modifier, socket_identifier, attribute="outline")
 
-    if obj.mode != 'OBJECT':
-        bpy.ops.object.mode_set(mode='OBJECT')
 
-    bpy.ops.object.geometry_nodes_input_attribute_toggle(
-        modifier_name=modifier.name,
-        input_name=socket_identifier
-    )
+def require_node_groups(specifications):
+    groups = {}
+    for name, (inputs, outputs) in specifications.items():
+        try:
+            group = ensure_node_group(name)
+        except (OSError, RuntimeError) as exc:
+            raise MaterialSetupError(f"Cannot load required node group {name}: {exc}") from exc
+        if group is None:
+            raise MaterialSetupError(f"Required node group missing: {name}")
+        if group.bl_idname != 'ShaderNodeTree':
+            raise MaterialSetupError(f"{name}: expected a shader node group")
+        sockets = {(s.in_out, s.name) for s in group.interface.items_tree if s.item_type == 'SOCKET'}
+        for direction, required in (("INPUT", inputs), ("OUTPUT", outputs)):
+            for socket in required:
+                if (direction, socket) not in sockets:
+                    raise MaterialSetupError(f"{name}: required {direction.lower()} '{socket}' missing")
+        groups[name] = group
+    return groups

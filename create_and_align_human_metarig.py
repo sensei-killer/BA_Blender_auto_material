@@ -549,12 +549,15 @@ def print_report():
     print("=== End report ===\n")
 
 
-def main():
-    source = resolve_source_armature()
+def main(source=None):
+    for values in report.values():
+        values.clear()
+    source = source or resolve_source_armature()
     target = create_human_metarig(source)
     align_metarig(source, target)
     print_report()
-    return report
+    return target
 
 
-main()
+if __name__ == '__main__':
+    main()

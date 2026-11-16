@@ -1,7 +1,7 @@
 import bpy
-import os
-from bpy.types import Operator, PropertyGroup
-from bpy.props import CollectionProperty, StringProperty
+
+from .ba_textures import MaterialSetupError, find_prop_images
+from .ba_utils import require_node_groups
 
 from .ba_utils import add_alpha_node, add_light_color_node, add_lit_alpha_node, clear_nodes, configure_alpha_material, ensure_node_group, ensure_output, link_alpha_to_output, material_name_key, new_base_color_tex, new_tex, safe_link, set_input_default
 
@@ -17,43 +17,30 @@ def is_car_alpha_material(mat):
 def find_image_node(mat):
     if not mat.use_nodes:
         return None
+    nodes = [node for node in mat.node_tree.nodes if node.type == 'TEX_IMAGE' and node.image]
+    base, _ = find_prop_images([node.image for node in nodes], mat)
+    return next((node for node in nodes if node.image == base), None)
 
-    for n in mat.node_tree.nodes:
-        if n.type == 'TEX_IMAGE' and n.image:
-            return n
-    return None
-
-def find_base_and_mask(images):
-    base = None
-    mask = None
-
-    for img in images:
-        if img.filepath:
-            name = os.path.splitext(os.path.basename(bpy.path.abspath(img.filepath)))[0].lower()
-        else:
-            name = os.path.splitext(os.path.basename(img.name))[0].lower()
-
-        if name.endswith("mask"):
-            if mask is None:
-                mask = img
-        else:
-            if base is None:
-                base = img
-
-    return base, mask
+def find_base_and_mask(images, mat):
+    return find_prop_images(images, mat)
 
 
 
 def setup_prop_material(mat, images):
-    if not mat.use_nodes:
-        mat.use_nodes = True
-
-    base_img, mask_img = find_base_and_mask(images)
+    base_img, mask_img = find_base_and_mask(images, mat)
 
     if base_img is None:
         print(f"[BA] Missing base texture for {mat.name}")
-        return
+        raise MaterialSetupError(f"{mat.name}: base color texture missing")
 
+    require_node_groups({
+        "ba_weapon_shader": (("Base_Color", "Mask"), ("Result",)),
+        "ba_metallic_shader": (("Color", "Base_Color", "Mask"), ("Result",)),
+        "ba_light_color": (("Color", "basecolor"), ("Color",)),
+    })
+
+    if not mat.use_nodes:
+        mat.use_nodes = True
     clear_nodes(mat)
     nt = mat.node_tree
 
@@ -116,24 +103,24 @@ def setup_car_alpha_material(mat, images):
 
 
 def setup_prop_alpha_material(mat, images, use_textures=True):
+    base_img, mask_img = find_base_and_mask(images, mat) if use_textures else (None, None)
+
+    if base_img is None and use_textures:
+        old_tex = find_image_node(mat)
+        if old_tex:
+            base_img = old_tex.image
+
+    require_node_groups({
+        "ba_weapon_shader": (("Base_Color", "Mask"), ("Result",)),
+        "ba_light_color": (("Color", "basecolor"), ("Color",)),
+        "ba_alpha": (("color", "alpha"), ("Shader",)),
+    })
     if not mat.use_nodes:
         mat.use_nodes = True
-
     configure_alpha_material(mat)
-
-    old_tex = find_image_node(mat) if use_textures else None
-    had_texture = old_tex is not None
-    old_image = old_tex.image if old_tex else None
-
     clear_nodes(mat)
     nt = mat.node_tree
-
     out = ensure_output(mat)
-
-    base_img, mask_img = find_base_and_mask(images) if use_textures else (None, None)
-
-    if base_img is None and had_texture:
-        base_img = old_image
 
     base_node = None
     mask_node = None

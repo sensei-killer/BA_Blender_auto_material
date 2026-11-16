@@ -1,18 +1,27 @@
 import bpy
 from pathlib import Path
 
+if __package__:
+    from . import create_and_align_human_metarig as create_script
+    from . import migrate_body_to_rig_auto as migrate_script
+    from .ba_rigify_state import ConversionState
+else:
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import create_and_align_human_metarig as create_script
+    import migrate_body_to_rig_auto as migrate_script
+    from ba_rigify_state import ConversionState
+
 # One-click pipeline:
 # 1. Select one source/original armature and one or more meshes.
 # 2. Run this script.
-# 3. It creates/alights a Rigify Human metarig, generates the Rigify rig, and
+# 3. It creates/aligns a Rigify Human metarig, generates the Rigify rig, and
 #    migrates selected meshes from the source armature to the generated rig.
 #
 # This script reuses the workspace scripts:
 # - create_and_align_human_metarig.py
 # - migrate_body_to_rig_auto.py
 
-CREATE_SCRIPT = "create_and_align_human_metarig.py"
-MIGRATE_SCRIPT = "migrate_body_to_rig_auto.py"
 GENERATED_RIG_SUFFIX = "_rigify_auto"
 IGNORED_RIG_NAME_TOKENS = ("mouthre",)
 
@@ -22,27 +31,6 @@ def is_ignored_rig(obj):
         return False
     lowered = obj.name.lower()
     return any(token in lowered for token in IGNORED_RIG_NAME_TOKENS)
-
-
-def script_dir():
-    if "__file__" in globals():
-        return Path(__file__).resolve().parent
-    raise RuntimeError("Could not resolve BA addon script directory")
-
-
-def load_script(name):
-    path = script_dir() / name
-    if path.exists():
-        if bpy.data.texts.get(name) is not None:
-            print(f"[BA] Ignoring Blender Text script '{name}'; using addon file: {path}")
-        return path.read_text(encoding="utf-8")
-
-    text = bpy.data.texts.get(name)
-    if text is not None:
-        print(f"[BA] Addon file missing for '{name}', using Blender Text fallback")
-        return text.as_string()
-
-    raise FileNotFoundError(path)
 
 
 def require_selection():
@@ -65,34 +53,8 @@ def select_only(objects, active=None):
     bpy.context.view_layer.objects.active = active or (objects[0] if objects else None)
 
 
-def run_script_text(name, extra_namespace=None):
-    script = load_script(name)
-    namespace = {"__name__": "__main__", "__file__": str(script_dir() / name)}
-    if extra_namespace:
-        namespace.update(extra_namespace)
-    exec(compile(script, name, "exec"), namespace)
-    return namespace
-
-
 def create_and_align_metarig(source):
-    before = set(bpy.data.objects)
-    select_only([source], active=source)
-    run_script_text(CREATE_SCRIPT)
-    after = set(bpy.data.objects)
-
-    new_armatures = [obj for obj in after - before if obj.type == "ARMATURE"]
-    if len(new_armatures) == 1:
-        return new_armatures[0]
-
-    expected_name = f"{source.name}_metarig_auto"
-    obj = bpy.data.objects.get(expected_name)
-    if obj and obj.type == "ARMATURE":
-        return obj
-
-    candidates = [obj for obj in bpy.data.objects if obj.type == "ARMATURE" and obj.name.endswith("_metarig_auto")]
-    if candidates:
-        return candidates[-1]
-    raise RuntimeError("Could not find generated metarig after create/alignment step")
+    return create_script.main(source)
 
 
 def generate_rigify_rig(metarig, source):
@@ -121,19 +83,15 @@ def generate_rigify_rig(metarig, source):
 
     rig.name = rig_basename
     rig.data.name = rig_basename
+    # Rigify creates a fresh rig at identity while keeping metarig-local bones.
+    rig.matrix_world = metarig.matrix_world.copy()
+    bpy.context.view_layer.update()
     return rig
 
 
 def migrate_meshes(source, generated_rig, meshes):
     select_only([source, generated_rig] + meshes, active=meshes[0])
-    run_script_text(
-        MIGRATE_SCRIPT,
-        {
-            "BA_SOURCE_ARMATURE": source,
-            "BA_TARGET_ARMATURE": generated_rig,
-            "BA_SELECTED_MESHES": meshes,
-        },
-    )
+    return migrate_script.main(source, generated_rig, meshes)
 
 
 def hide_setup_armatures(source, metarig):
@@ -143,8 +101,54 @@ def hide_setup_armatures(source, metarig):
         obj.hide_render = True
 
 
+def preflight(source, meshes):
+    for name in ('Bip001 Pelvis', 'Bip001 Spine', 'Bip001 Spine1', 'Bip001 Neck', 'Bip001 Head'):
+        if source.data.bones.get(name) is None:
+            raise RuntimeError(f'Source rig is missing required bone: {name}')
+    for side in ('L', 'R'):
+        for name in ('Clavicle', 'UpperArm', 'Forearm', 'Hand', 'Thigh', 'Calf', 'Foot', 'Toe0', 'Finger0', 'Finger01', 'Finger1', 'Finger11', 'Finger2', 'Finger21'):
+            bone = f'Bip001 {side} {name}'
+            if source.data.bones.get(bone) is None:
+                raise RuntimeError(f'Source rig is missing required bone: {bone}')
+    if source.library or source.data.library or any(m.library or m.data.library for m in meshes):
+        raise RuntimeError('Rigify conversion requires editable local objects and mesh data')
+    if bpy.data.objects.get(source.name + GENERATED_RIG_SUFFIX):
+        raise RuntimeError('A generated rig already exists for this source; use the existing rig or restore the original scene first')
+    for mesh in meshes:
+        other_rigs = [mod.object for mod in mesh.modifiers if mod.type == 'ARMATURE' and mod.object and mod.object != source and not is_ignored_rig(mod.object)]
+        if mesh.parent and mesh.parent.type == 'ARMATURE' and mesh.parent != source and not is_ignored_rig(mesh.parent):
+            other_rigs.append(mesh.parent)
+        if other_rigs:
+            raise RuntimeError(f'{mesh.name} is bound to another armature; select only meshes for {source.name}')
+    if abs(source.matrix_world.determinant()) < 1e-10:
+        raise RuntimeError('Source rig has a non-invertible transform')
+    if not migrate_script.find_body_meshes(meshes):
+        raise RuntimeError('Selection has no recognizable body vertex groups')
+    try:
+        bpy.ops.object.armature_human_metarig_add.get_rna_type()
+        bpy.ops.pose.rigify_generate.get_rna_type()
+    except (AttributeError, RuntimeError) as exc:
+        raise RuntimeError('Enable the Rigify add-on before converting') from exc
+
+
 def main():
     source, meshes = require_selection()
+    bpy.context.view_layer.update()
+    preflight(source, meshes)
+    body_meshes = migrate_script.find_body_meshes_for_source(source, meshes)
+    state = ConversionState(bpy.context, source, meshes, body_meshes)
+    try:
+        state.begin()
+        result = run_pipeline(source, meshes)
+    except Exception as exc:
+        errors = state.rollback()
+        detail = '; recovery incomplete, generated data retained: ' + '; '.join(errors) if errors else '; original data restored'
+        raise RuntimeError(f'Rigify conversion failed: {exc}{detail}') from exc
+    state.release_new_data()
+    return result
+
+
+def run_pipeline(source, meshes):
     print("\n=== Auto Rigify bind pipeline ===")
     print(f"Source armature: {source.name}")
     print(f"Meshes: {[mesh.name for mesh in meshes]}")
@@ -158,9 +162,12 @@ def main():
     migrate_meshes(source, generated_rig, meshes)
     hide_setup_armatures(source, metarig)
     select_only([generated_rig] + meshes, active=generated_rig)
+    bpy.context.view_layer.update()
     print("Migration completed")
     print(f"Hidden setup armatures: {source.name}, {metarig.name}")
     print("=== End Auto Rigify bind pipeline ===\n")
+    return generated_rig
 
 
-main()
+if __name__ == '__main__':
+    main()

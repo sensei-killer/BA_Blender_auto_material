@@ -166,16 +166,16 @@ def find_body_meshes(meshes):
     ]
 
 
+def find_body_meshes_for_source(source, meshes):
+    bound = [mesh for mesh in meshes if has_source_armature_modifier(mesh, source) or mesh.parent == source]
+    return find_body_meshes(bound) or find_body_meshes(meshes)
+
+
 def classify_scene_objects(source, target, meshes):
     if source is None or target is None or not meshes:
         return None
 
-    bound_meshes = [
-        mesh
-        for mesh in meshes
-        if has_source_armature_modifier(mesh, source) or mesh.parent == source
-    ]
-    body_meshes = find_body_meshes(bound_meshes) or find_body_meshes(meshes)
+    body_meshes = find_body_meshes_for_source(source, meshes)
     if not body_meshes:
         return None
     body_mesh_set = set(body_meshes)
@@ -605,7 +605,7 @@ def retarget_mesh_to_target(mesh, source, target):
         report["parenting"].append(f"{mesh.name} parent cleared with world transform preserved")
 
 
-def retarget_shader_control_empties(context, target, meshes):
+def retarget_shader_control_empties(context, target, meshes, source=None):
     if ba_shader_controls is None:
         report["warnings"].append(
             "ba_shader_controls module unavailable; skipped shader control retarget"
@@ -621,7 +621,7 @@ def retarget_shader_control_empties(context, target, meshes):
         mesh.select_set(True)
     bpy.context.view_layer.objects.active = meshes[0] if meshes else target
 
-    hair_empty, face_empty = ba_shader_controls.retarget_shader_controls_to_rig(context, target)
+    hair_empty, face_empty = ba_shader_controls.retarget_shader_controls_to_rig(context, target, source=source)
     if hair_empty:
         report["parenting"].append(f"{hair_empty.name} retargeted to {target.name}")
     if face_empty:
@@ -670,8 +670,16 @@ def print_report():
     print("=== End report ===\n")
 
 
-def main():
-    source, target, body_meshes, modifier_extra_meshes, parented_extra_meshes, unbound_meshes = resolve_scene_objects()
+def main(source=None, target=None, meshes=None):
+    for values in report.values():
+        values.clear()
+    if source is not None and target is not None and meshes is not None:
+        resolved = classify_scene_objects(source, target, meshes)
+        if resolved is None:
+            raise RuntimeError('No recognizable body meshes in explicit migration context')
+    else:
+        resolved = resolve_scene_objects()
+    source, target, body_meshes, modifier_extra_meshes, parented_extra_meshes, unbound_meshes = resolved
     extra_meshes = modifier_extra_meshes + parented_extra_meshes
     processed_meshes = body_meshes + extra_meshes
 
@@ -693,11 +701,12 @@ def main():
         retarget_mesh_to_target(body_mesh, source, target)
     for extra_mesh in modifier_extra_meshes:
         retarget_mesh_to_target(extra_mesh, source, target)
-    retarget_shader_control_empties(bpy.context, target, processed_meshes)
-    reparent_source_children(source, target, processed_meshes, old_to_new_body)
+    retarget_shader_control_empties(bpy.context, target, processed_meshes, source)
+    reparent_source_children(source, target, body_meshes + modifier_extra_meshes, old_to_new_body)
 
     print_report()
     return report
 
 
-main()
+if __name__ == '__main__':
+    main()
