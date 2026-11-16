@@ -98,6 +98,21 @@ def configure_rotation_only_child_of(constraint):
     constraint.use_scale_z = False
 
 
+def child_of_target_rotation(constraint, depsgraph):
+    """World-space, rotation-only target used by BA's head constraint."""
+    target = constraint.target
+    if target is None:
+        return None
+    evaluated = target.evaluated_get(depsgraph)
+    world = evaluated.matrix_world
+    if constraint.subtarget and evaluated.type == 'ARMATURE':
+        bone = evaluated.pose.bones.get(constraint.subtarget)
+        if bone is None:
+            return None
+        world = world @ bone.matrix
+    return world.to_quaternion().to_matrix().to_4x4()
+
+
 def ensure_head_control(context, empty_name, rig=None):
     if rig is None:
         rig = find_rig_from_objects(context.selected_objects)
@@ -143,12 +158,25 @@ def ensure_head_control(context, empty_name, rig=None):
             child_of = c
             break
 
+    previous_rotation = None
+    if child_of is not None and (child_of.target != rig or child_of.subtarget != head_bone):
+        context.view_layer.update()
+        target_rotation = child_of_target_rotation(child_of, context.evaluated_depsgraph_get())
+        if target_rotation is not None:
+            inverse_rotation = child_of.inverse_matrix.to_quaternion().to_matrix().to_4x4()
+            previous_rotation = target_rotation @ inverse_rotation
+
     if child_of is None:
         child_of = empty.constraints.new(type='CHILD_OF')
         child_of.name = 'BA_HeadRotation'
     child_of.target = rig
     child_of.subtarget = head_bone
     configure_rotation_only_child_of(child_of)
+    if previous_rotation is not None:
+        # Rigify head axes differ from BA bones; retain the old constraint delta.
+        target_rotation = child_of_target_rotation(child_of, context.evaluated_depsgraph_get())
+        child_of.inverse_matrix = target_rotation.inverted() @ previous_rotation
+        child_of.set_inverse_pending = False
 
     return empty
 
