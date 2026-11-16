@@ -112,6 +112,8 @@ class BA_OT_set_color_management(Operator):
 class BA_OT_convert_to_rigify(Operator):
     bl_idname = "ba.convert_to_rigify"
     bl_label = "Convert to Rigify"
+    # Keep nested Rigify/mode operators and the final data migration in one step.
+    bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         try:
