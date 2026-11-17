@@ -4,12 +4,14 @@ from pathlib import Path
 if __package__:
     from . import create_and_align_human_metarig as create_script
     from . import migrate_body_to_rig_auto as migrate_script
+    from . import ba_eye_controls
     from .ba_rigify_state import ConversionState, ConversionRecoveryError
 else:
     import sys
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import create_and_align_human_metarig as create_script
     import migrate_body_to_rig_auto as migrate_script
+    import ba_eye_controls
     from ba_rigify_state import ConversionState, ConversionRecoveryError
 
 # One-click pipeline:
@@ -131,15 +133,16 @@ def preflight(source, meshes):
         raise RuntimeError('Enable the Rigify add-on before converting') from exc
 
 
-def main():
+def main(include_eye_controls=True, warnings=None):
     source, meshes = require_selection()
     bpy.context.view_layer.update()
     preflight(source, meshes)
+    eye_setup = ba_eye_controls.capture_setup(source)
     body_meshes = migrate_script.find_body_meshes_for_source(source, meshes)
     state = ConversionState(bpy.context, source, meshes, body_meshes)
     try:
         state.begin()
-        result = run_pipeline(source, meshes, body_meshes)
+        result = run_pipeline(source, meshes, body_meshes, include_eye_controls, eye_setup, warnings)
     except Exception as exc:
         try:
             errors = state.rollback()
@@ -155,7 +158,7 @@ def main():
     return result
 
 
-def run_pipeline(source, meshes, ground_meshes=None):
+def run_pipeline(source, meshes, ground_meshes=None, include_eye_controls=True, eye_setup=None, warnings=None):
     print("\n=== Auto Rigify bind pipeline ===")
     print(f"Source armature: {source.name}")
     print(f"Meshes: {[mesh.name for mesh in meshes]}")
@@ -167,6 +170,18 @@ def run_pipeline(source, meshes, ground_meshes=None):
     print(f"Generated Rigify rig: {generated_rig.name}")
 
     migrate_meshes(source, generated_rig, meshes)
+    if eye_setup is not None:
+        ba_eye_controls.restore_migrated_controls(bpy.context, generated_rig, eye_setup)
+    elif include_eye_controls:
+        try:
+            ba_eye_controls.validate_new_setup(generated_rig)
+        except ba_eye_controls.EyeControlError as exc:
+            warning = f"Eye controls skipped: {exc}"
+            if warnings is not None:
+                warnings.append(warning)
+            print(warning)
+        else:
+            ba_eye_controls.generate_eye_controls(bpy.context, generated_rig)
     hide_setup_armatures(source, metarig)
     select_only([generated_rig] + meshes, active=generated_rig)
     bpy.context.view_layer.update()
